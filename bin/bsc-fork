@@ -1,0 +1,322 @@
+#!/usr/bin/env python3
+"""bsc-fork — answers a question about the pinned bsc-geth fork from the committed index.
+
+The fork is parsed once into docs/fork-knowledge/symbols.json. Reading that file to
+find one row costs a session the whole file; this prints the row. It also says which
+commit go.mod pins, whether the index was built at that commit, and which tree is
+which: the pinned one the client compiles, and the checkout the session edits.
+
+Usage: bsc-fork [-C DIR] [--index PATH] [--json] VERB ...
+  pin                    the go.mod pin, its full SHA and time, the pinned tree, the
+                         checkout and where it stands against the pin, which of the two
+                         the client compiles, the index state
+  show SYMBOL...         every row named SYMBOL: signature, file:line, verified, note
+  search TERM...         rows where every TERM appears in the symbol, signature, file or note
+  list [--kind K] [--unverified]
+                         one line per row
+  check                  is the index built at the pin? exit 1 when it is not
+  path FILE[:LINE] [--pinned | --checkout]
+                         the absolute path of a fork file. Default: in the tree the
+                         client compiles (the pin, or the checkout under go.work).
+                         --pinned: the read-only module cache. --checkout: the tree
+                         to edit.
+
+  -C DIR                 work as if started in DIR (default: the current directory)
+  --index PATH           the index file (default: docs/fork-knowledge/symbols.json)
+  --json                 machine output: one JSON document on stdout
+
+Env:  BSC_FORK_INDEX  the index file, when --index is not given
+      BSC_FORK_PATH   the bsc-geth checkout this client's sessions edit. A go.work at
+                      the client's root that uses a fork checkout names it too, and
+                      then the client compiles it.
+Exit: 0 answered · 1 nothing matched, the index is stale, or the file is absent
+      2 usage, no go.mod with a fork pin, or no readable index
+"""
+
+from __future__ import annotations
+
+import argparse
+import difflib
+import json
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
+import forkpin  # after the path is set, just above
+
+ME = "bsc-fork"
+
+
+def fail(message: str) -> int:
+    print(f"{ME}: {message}", file=sys.stderr)
+    return 2
+
+
+def anchor(row: dict) -> str:
+    file, line = str(row.get("file") or ""), row.get("line") or 0
+    return f"{file}:{line}" if file and line else file or "(no anchor)"
+
+
+def flag(row: dict) -> str:
+    return "verified" if row.get("verified") is True else "UNVERIFIED"
+
+
+def one_line(row: dict) -> str:
+    return f"{row.get('kind', '?'):7} {row.get('symbol', '?')}  {anchor(row)}  {flag(row)}"
+
+
+def full(row: dict) -> str:
+    lines = [f"{row.get('symbol', '?')}  [{row.get('kind', '?')}, {flag(row)}]", f"  at   {anchor(row)}"]
+    if row.get("signature"):
+        lines.append(f"  sig  {row['signature']}")
+    if row.get("note"):
+        lines.append(f"  note {row['note']}")
+    return "\n".join(lines)
+
+
+class Fork:
+    """The module, its pin, and the index, each read when first asked for."""
+
+    def __init__(self, start: Path, index: str | None):
+        root = forkpin.module_root(start)
+        if root is None:
+            raise forkpin.ForkError(f"no go.mod at or above {start}")
+        self.root = root
+        _, pin = forkpin.read_gomod(root / "go.mod")
+        if pin is None:
+            raise forkpin.ForkError(f"{root / 'go.mod'} has no replace of {forkpin.UPSTREAM}: not a fork client")
+        self.pin = pin
+        self.index_file = forkpin.index_path(root, index)
+        self._index: dict | None = None
+
+    @property
+    def index(self) -> dict:
+        if self._index is None:
+            self._index = forkpin.load_index(self.index_file)
+        return self._index
+
+    @property
+    def rows(self) -> list[dict]:
+        return [r for r in self.index["symbols"] if isinstance(r, dict)]
+
+    def state(self) -> str:
+        try:
+            return forkpin.drift(self.pin, self.index)
+        except forkpin.ForkError:
+            return forkpin.drift(self.pin, None)
+
+    def warn_if_stale(self) -> None:
+        """A row from an index built at another commit is a claim about another tree."""
+        state = self.state()
+        if state == "stale":
+            built = str(self.index.get("fork_sha") or "")[:12] or "no SHA"
+            print(f"{ME}: the index was built at {built} and go.mod pins {self.pin.sha12}: every "
+                  f"`verified` flag and file:line below is unconfirmed at the pin", file=sys.stderr)
+        elif state == "local":
+            print(f"{ME}: go.mod replaces the fork with a local directory ({self.pin.modpath}): "
+                  f"the index may not describe it", file=sys.stderr)
+
+
+def emit(args: argparse.Namespace, document: object, text: str) -> None:
+    print(json.dumps(document, indent=2) if args.json else text)
+
+
+def verb_pin(fork: Fork, args: argparse.Namespace) -> int:
+    cache = forkpin.modcache()
+    meta = forkpin.info(fork.pin, cache)
+    tree = forkpin.pinned_dir(fork.pin, cache)
+    present = tree is not None and tree.is_dir()
+    edited = forkpin.checkout(fork.root, fork.pin)
+    standing = forkpin.checkout_state(edited, fork.pin) if edited is not None else {}
+    _, compiles = forkpin.compiled_dir(fork.root, fork.pin, cache)
+    state = fork.state()
+    try:
+        built, count = str(fork.index.get("fork_sha") or ""), len(fork.rows)
+    except forkpin.ForkError:
+        built, count = "", 0
+    document = {
+        "gomod": str(fork.pin.gomod), "module": fork.pin.modpath, "version": fork.pin.pseudo,
+        "sha12": fork.pin.sha12, "sha": meta.get("sha", ""), "time": meta.get("time", ""),
+        "tree": str(tree) if tree else "", "tree_present": present,
+        "checkout": str(edited) if edited else "", "checkout_state": standing, "compiles": compiles,
+        "index": str(fork.index_file), "index_sha": built, "index_symbols": count, "index_state": state,
+    }
+    if fork.pin.local:
+        pinned = "-  (go.mod replaces the fork with a local directory)"
+    else:
+        pinned = f"{tree or '-'}" + ("" if present else "  (absent: run `go mod download` in the module)")
+    text = [
+        f"module   {fork.pin.modpath}",
+        f"version  {fork.pin.pseudo or '(a local directory)'}",
+        f"sha      {meta.get('sha') or fork.pin.sha12 or '-'}" + ("" if meta or fork.pin.local else
+                                                                  "  (12 digits: the module cache has no metadata for this pin)"),
+        f"time     {meta.get('time') or '-'}",
+        f"tree     {pinned}",
+        f"checkout {edited}  ({forkpin.describe(standing)})" if edited else
+        "checkout -  (none named: set BSC_FORK_PATH to a bsc-geth checkout to edit the fork)",
+        f"compiles {compiles}",
+        f"index    {fork.index_file}",
+        f"state    {state}" + (f"  (built at {built[:12]}, {count} symbols)" if built else ""),
+    ]
+    emit(args, document, "\n".join(text))
+    return 0
+
+
+def verb_show(fork: Fork, args: argparse.Namespace) -> int:
+    fork.warn_if_stale()
+    found: list[dict] = []
+    missing: list[str] = []
+    for name in args.symbol:
+        rows = [r for r in fork.rows if r.get("symbol") == name]
+        if not rows:
+            rows = [r for r in fork.rows if str(r.get("symbol", "")).lower() == name.lower()]
+        if rows:
+            found.extend(rows)
+        else:
+            missing.append(name)
+    if found:
+        emit(args, found, "\n\n".join(full(r) for r in found))
+    names = sorted({str(r.get("symbol", "")) for r in fork.rows})
+    for name in missing:
+        near = difflib.get_close_matches(name, names, n=4, cutoff=0.5)
+        hint = f" Nearest: {', '.join(near)}." if near else ""
+        print(f"{ME}: no row named {name}.{hint} A symbol absent from the index is not confirmed "
+              f"at the pin: read it in the pinned tree (`{ME} pin`), then add it to the index.",
+              file=sys.stderr)
+    return 1 if missing else 0
+
+
+def verb_search(fork: Fork, args: argparse.Namespace) -> int:
+    fork.warn_if_stale()
+    terms = [t.lower() for t in args.term]
+
+    def hay(row: dict) -> str:
+        return " ".join(str(row.get(k) or "") for k in ("symbol", "signature", "file", "note")).lower()
+
+    rows = [r for r in fork.rows if all(t in hay(r) for t in terms)]
+    # a name match outranks a note match
+    rows.sort(key=lambda r: not all(t in str(r.get("symbol", "")).lower() for t in terms))
+    shown = rows[: args.limit]
+    if not rows:
+        print(f"{ME}: no row mentions {' and '.join(args.term)}", file=sys.stderr)
+        return 1
+    text = "\n".join(one_line(r) for r in shown)
+    if len(rows) > len(shown):
+        text += f"\n({len(rows) - len(shown)} more: raise --limit, or add a term)"
+    emit(args, shown, text)
+    return 0
+
+
+def verb_list(fork: Fork, args: argparse.Namespace) -> int:
+    fork.warn_if_stale()
+    rows = fork.rows
+    if args.kind:
+        rows = [r for r in rows if r.get("kind") == args.kind]
+    if args.unverified:
+        rows = [r for r in rows if r.get("verified") is not True]
+    if not rows:
+        kinds = ", ".join(sorted({str(r.get("kind")) for r in fork.rows}))
+        print(f"{ME}: no such rows (kinds in this index: {kinds})", file=sys.stderr)
+        return 1
+    emit(args, rows, "\n".join(one_line(r) for r in rows))
+    return 0
+
+
+def verb_check(fork: Fork, args: argparse.Namespace) -> int:
+    state = forkpin.drift(fork.pin, fork.index)  # an unreadable index is exit 2, not a verdict
+    built = str(fork.index.get("fork_sha") or "")
+    unverified = sum(1 for r in fork.rows if r.get("verified") is not True)
+    document = {"state": state, "pin": fork.pin.sha12, "index_sha": built,
+                "symbols": len(fork.rows), "unverified": unverified}
+    if state == "current":
+        emit(args, document, f"current: {len(fork.rows)} symbols at {fork.pin.sha12}, {unverified} unverified")
+        return 0
+    if state == "local":
+        emit(args, document, f"local: go.mod replaces the fork with {fork.pin.modpath}, so no commit to compare")
+        return 1
+    if state == "tagged":
+        emit(args, document, f"tagged: go.mod pins {fork.pin.pseudo}, which is not a pseudo-version, "
+                             f"so no commit to compare")
+        return 1
+    emit(args, document, f"stale: the index was built at {built[:12] or 'no SHA'} and go.mod pins "
+                         f"{fork.pin.sha12}. Regenerate the index at the pin before relying on a row.")
+    return 1
+
+
+def verb_path(fork: Fork, args: argparse.Namespace) -> int:
+    file, _, line = args.file.partition(":")
+    if line and not line.isdigit():
+        return fail(f"{args.file}: the part after ':' is a line number")
+    cache = forkpin.modcache()
+    if args.checkout:
+        tree, which = forkpin.checkout(fork.root, fork.pin), "the checkout"
+    elif args.pinned:
+        tree, which = forkpin.pinned_dir(fork.pin, cache), "the pin (module cache)"
+    else:
+        tree, which = forkpin.compiled_dir(fork.root, fork.pin, cache)
+    if tree is None or not tree.is_dir():
+        need = ("set BSC_FORK_PATH to a bsc-geth checkout" if which.startswith("the checkout")
+                else "run `go mod download` in the module")
+        print(f"{ME}: {which} is absent ({tree or 'not named'}): {need}", file=sys.stderr)
+        return 1
+    target = (tree / file).resolve()
+    if tree.resolve() not in (target, *target.parents):
+        return fail(f"{file}: outside the fork tree")
+    if not target.exists():
+        print(f"{ME}: {file} is not in {which} ({tree})", file=sys.stderr)
+        return 1
+    if which.startswith("the checkout"):
+        # a row's file:line was confirmed at the index's commit, which a checkout may have left
+        standing = forkpin.checkout_state(tree, fork.pin, dirty=False)
+        if not standing.get("at_pin"):
+            print(f"{ME}: {which} is {forkpin.describe(standing)}: a line number from the index may "
+                  f"have moved", file=sys.stderr)
+    emit(args, {"path": str(target), "line": int(line) if line else 0, "tree": which},
+         f"{target}:{line}" if line else str(target))
+    return 0
+
+
+def parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog=ME, add_help=False, usage=f"{ME} [-C DIR] [--index PATH] [--json] VERB ...")
+    p.add_argument("-h", "--help", action="store_true")
+    p.add_argument("-C", dest="dir", default=".")
+    p.add_argument("--index")
+    p.add_argument("--json", action="store_true")
+    verbs = p.add_subparsers(dest="verb", metavar="VERB")
+    verbs.add_parser("pin", add_help=False).set_defaults(run=verb_pin)
+    show = verbs.add_parser("show", add_help=False)
+    show.add_argument("symbol", nargs="+")
+    show.set_defaults(run=verb_show)
+    search = verbs.add_parser("search", add_help=False)
+    search.add_argument("term", nargs="+")
+    search.add_argument("--limit", type=int, default=20)
+    search.set_defaults(run=verb_search)
+    listing = verbs.add_parser("list", add_help=False)
+    listing.add_argument("--kind")
+    listing.add_argument("--unverified", action="store_true")
+    listing.set_defaults(run=verb_list)
+    verbs.add_parser("check", add_help=False).set_defaults(run=verb_check)
+    path = verbs.add_parser("path", add_help=False)
+    path.add_argument("file", metavar="FILE[:LINE]")
+    which = path.add_mutually_exclusive_group()
+    which.add_argument("--pinned", action="store_true")
+    which.add_argument("--checkout", action="store_true")
+    path.set_defaults(run=verb_path)
+    return p
+
+
+def main(argv: list[str]) -> int:
+    args = parser().parse_args(argv)
+    if args.help or not args.verb:
+        print((__doc__ or "").strip(), file=sys.stdout if args.help else sys.stderr)
+        return 0 if args.help else 2
+    try:
+        return args.run(Fork(Path(args.dir).expanduser().resolve(), args.index), args)
+    except forkpin.ForkError as err:
+        return fail(str(err))
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

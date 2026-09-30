@@ -1,0 +1,15 @@
+{
+  "name": "blockchain-kit",
+  "description": "blockchain-kit — Go and BSC tooling for Claude Code: the bsc-geth fork lookup, Go authoring and determinism skills, implementer and auditor agents.",
+  "owner": {
+    "name": "Mrinal Dhillon",
+    "email": "mrinaldhillon@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "blockchain-kit",
+      "source": "./",
+      "description": "bsc-fork and setup/update scripts on PATH, a session-start routing hook, gofmt on edit, plus skills: go, fork-lookup, fork-node-api, contract-abi, binance-streams, record-format, replay-parity, hot-path-determinism, environment-detection, and seven agents."
+    }
+  ]
+}

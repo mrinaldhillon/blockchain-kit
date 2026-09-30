@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""PostToolUse observer (Edit|Write|MultiEdit): gofmt the Go file just written.
+
+Scope is deliberately narrow: `tool_input.file_path` must end in `.go` AND
+resolve (symlinks included) under ${CLAUDE_PROJECT_DIR} or under the bsc-geth
+checkout that project edits ($BSC_FORK_PATH, or the one its go.work uses). An
+edit anywhere else and an edit to anything that is not Go are both no-ops.
+Inside the scope the file is formatted in place with `<gofmt> -l -w <file_path>`
+and nothing is said; a formatter that exits non-zero or is absent surfaces ONE
+additionalContext line (`gofmt: <first stderr line>`, `gofmt: not found`) rather
+than being swallowed — a silent formatter failure reads as a formatted file.
+
+ONE file, never a tree, and never `gofmt -s`. The fork's upstream files are
+gofmt-clean but not simplify-clean: `-s` on a file carrying a small wiring edit
+rewrites unrelated upstream lines, and every one of them is a conflict at the
+next upstream rebase.
+
+gofmt rewrites layout only. It never adds or removes an import, so a clean run
+says nothing about the import block (the `go` skill, gofmt-is-not-goimports).
+
+An observer: fails open — exit 0 on every path, including a tty stdin, an
+unparseable payload, an absent CLAUDE_PROJECT_DIR and the hook's own bug.
+
+Env:   BLOCKCHAIN_KIT_GOFMT=0 turns it off.
+       BLOCKCHAIN_KIT_GOFMT_BIN=<path> selects the formatter (default `gofmt`).
+Usage: fed the PostToolUse JSON payload on stdin by hooks/hooks.json.
+Exit:  0 always.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
+TOOLS = frozenset({"Edit", "Write", "MultiEdit"})
+TIMEOUT_S = 30
+
+
+def under(target: Path, tree: Path) -> bool:
+    """True when `target` resolves under `tree` — both realpathed first, so a
+    symlink out of the tree is outside it."""
+    try:
+        real, root = Path(os.path.realpath(target)), Path(os.path.realpath(tree))
+    except OSError:
+        return False
+    return root == real or root in real.parents
+
+
+def fork_checkout(project: Path) -> Path | None:
+    """The bsc-geth checkout `project` edits, None when it names none or is no fork client."""
+    import forkpin  # here, inside main's try: a broken lib must not break the edit
+
+    root = forkpin.module_root(project) or project
+    if not forkpin.is_client(root):
+        return None
+    tree = forkpin.checkout(root, forkpin.read_gomod(root / "go.mod")[1])
+    return tree if tree is not None and forkpin.is_fork(tree) else None
+
+
+def gofmt(path: Path) -> str | None:
+    """Format in place; the note to surface, or None when there is nothing to say."""
+    binary = os.environ.get("BLOCKCHAIN_KIT_GOFMT_BIN") or "gofmt"
+    try:
+        out = subprocess.run(
+            [binary, "-l", "-w", str(path)],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=TIMEOUT_S,
+        )
+    except (FileNotFoundError, NotADirectoryError, PermissionError):
+        return "gofmt: not found"
+    except subprocess.TimeoutExpired:
+        return f"gofmt: timed out after {TIMEOUT_S}s"
+    if out.returncode == 0:
+        return None
+    first = next((ln for ln in out.stderr.splitlines() if ln.strip()), f"exited {out.returncode}")
+    return f"gofmt: {first.strip()}"
+
+
+def main() -> int:
+    if os.environ.get("BLOCKCHAIN_KIT_GOFMT") == "0" or sys.stdin.isatty():
+        return 0
+    body = json.load(sys.stdin)
+    if not isinstance(body, dict) or body.get("tool_name") not in TOOLS:
+        return 0
+
+    file_path = (body.get("tool_input") or {}).get("file_path")
+    if not isinstance(file_path, str) or not file_path.endswith(".go"):
+        return 0
+    project = os.environ.get("CLAUDE_PROJECT_DIR")
+    if not project:
+        return 0
+    target = Path(file_path)
+    if not under(target, Path(project)):
+        fork = fork_checkout(Path(project))
+        if fork is None or not under(target, fork):
+            return 0
+
+    note = gofmt(target)
+    if note is None:
+        return 0
+    # the harness honours the envelope only when it names the event that fired
+    event = body.get("hook_event_name")
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": event if isinstance(event, str) and event else "PostToolUse",
+        "additionalContext": note,
+    }}))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception:  # noqa: BLE001 - an observer fails OPEN
+        sys.exit(0)

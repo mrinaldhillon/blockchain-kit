@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# tests/run — blockchain-kit's tests for bsc-fork, the session-start hook and
+# gofmt-on-edit.
+#
+# When: before committing a change to any of them, or to lib/forkpin.py. What Claude
+# Code does with a hook's answer, and whether a skill or an agent loads, is a live
+# probe in a real session: it costs model calls and is not run here.
+#
+# Usage: tests/run [-k PATTERN]
+#   (default)      the hermetic suite: a go.mod, an index and a module cache made in
+#                  a temp directory. No Go toolchain, no network, about a second.
+#   -k PATTERN     only the tests whose name matches (unittest -k)
+#
+# Output: one line when everything passes; failures in full. The complete log is
+# written to a file whose path is printed either way.
+#
+# Exit codes: 0 all passed · 1 a test failed · 2 bad arguments
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+select=()
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	-k) select+=(-k "${2:?-k needs a pattern}"); shift 2 ;;
+	-h | --help) sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	*) echo "tests/run: unknown argument: $1 (see --help)" >&2; exit 2 ;;
+	esac
+done
+
+log="$(mktemp "${TMPDIR:-/tmp}/blockchain-kit-tests.XXXXXX")"
+cd "$here/.."
+
+if PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover --start-directory tests \
+	${select[@]+"${select[@]}"} >"$log" 2>&1; then
+	echo "hermetic: $(grep --extended-regexp '^Ran [0-9]+ tests?' "$log") — ok · log $log"
+else
+	cat "$log"
+	echo "tests/run: hermetic suite failed · log $log" >&2
+	exit 1
+fi

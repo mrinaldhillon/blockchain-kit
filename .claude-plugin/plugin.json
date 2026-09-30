@@ -1,0 +1,10 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "blockchain-kit",
+  "version": "0.1.0",
+  "description": "Go development against the bsc-geth fork with Claude Code: bsc-fork (the pinned fork's symbols, pin and source tree without reading the index), a session-start hook that says what to load and whether the fork index was built at the pin, gofmt on edit, skills for Go authoring, the fork's node API, contract ABI, Binance streams, the record format, replay parity, hot-path determinism and environment wiring, agents that implement, audit determinism and parity, index the fork, capture fixtures and profile the node; /blockchain-kit:init per project; the blockchain-kit:implement workflow.",
+  "author": {
+    "name": "Mrinal Dhillon",
+    "email": "mrinaldhillon@gmail.com"
+  }
+}

@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# blockchain-kit-setup — once per machine: the plugin in the Claude Code config
+# home, and a report on the Go toolchain the kit's skills and agents assume.
+# Idempotent; re-run freely.
+#
+# Steps, in order:
+#   plugin     `plugin marketplace add` if the home does not know the marketplace,
+#              then `plugin install --scope user` if not installed; the version is
+#              READ BACK from installed_plugins.json — a zero exit is not an install
+#   link       ~/.local/share/blockchain-kit/kit -> the installed plugin (stable
+#              across version bumps, for a shell profile's PATH)
+#   go         `go version` — reported, never installed
+#   gopls      where gopls is, and whether the claude process can start it: the
+#              gopls MCP server is the repo's (.mcp.json), and a repo that names a
+#              bare `gopls` needs it on the PATH claude was started with. A repo
+#              that pins its own binary (./dev-setup/bin/gopls) needs nothing here.
+#   GOPRIVATE  whether `go env GOPRIVATE` covers the private fork's module path;
+#              without it `go mod download` asks the public proxy for a private
+#              repository and fails
+#   BSC_FORK_PATH  whether it names a bsc-geth clone: the checkout a session in
+#              the fork's client edits. Reported, never cloned
+#
+# The config home is $CLAUDE_CONFIG_DIR when set, else ~/.claude.
+#
+# Usage: blockchain-kit-setup [--source OWNER/REPO|PATH] [--fork-owner OWNER]
+#   --source S       marketplace source for a home that lacks it (default
+#                    mrinaldhillon/blockchain-kit; $BLOCKCHAIN_KIT_MARKETPLACE_SOURCE)
+#   --fork-owner O   the GitHub owner GOPRIVATE must cover (default mrinaldhillon)
+#
+# Terse on success, failures in full, the complete log tee'd to a temp file whose
+# path is printed last. Exit: 0 ok · 1 a step failed or needs a human · 2 usage.
+set -euo pipefail
+
+KIT_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+# shellcheck source=SCRIPTDIR/../lib/blockchain-kit-homes.sh
+. "$KIT_ROOT/lib/blockchain-kit-homes.sh"
+
+fork_owner=mrinaldhillon
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	--source) KIT_MARKETPLACE_SOURCE="${2:?--source needs a value}"; shift 2 ;;
+	--fork-owner) fork_owner="${2:?--fork-owner needs a value}"; shift 2 ;;
+	-h | --help) sed -n '2,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	*) echo "blockchain-kit-setup: unknown argument: $1 (see --help)" >&2; exit 2 ;;
+	esac
+done
+
+command -v claude >/dev/null || { echo "blockchain-kit-setup: claude CLI not on PATH" >&2; exit 1; }
+open_log blockchain-kit-setup
+
+# plugin
+install_plugin() {
+	local out version
+	if ! has_marketplace; then
+		if out="$(claude_in_home plugin marketplace add "$KIT_MARKETPLACE_SOURCE" 2>&1)"; then
+			note "$out"
+			say "  ok     $(pad "marketplace") added $KIT_MARKETPLACE_SOURCE"
+		else
+			fail_row "marketplace add" "$out"
+			return
+		fi
+	fi
+	version="$(installed_field version)"
+	if [[ -z "$version" ]]; then
+		if out="$(claude_in_home plugin install "$KIT_PLUGIN" --scope user 2>&1)"; then
+			note "$out"
+			version="$(installed_field version)"
+		else
+			fail_row "plugin install" "$out"
+			return
+		fi
+	fi
+	if [[ -n "$version" ]]; then
+		say "  ok     $(pad "plugin") $KIT_PLUGIN $version ($CONFIG_HOME)"
+	else
+		fail_row "plugin" "install reported success but $CONFIG_HOME/plugins/installed_plugins.json has no user-scope $KIT_PLUGIN"
+	fi
+}
+install_plugin
+
+repoint_link "$KIT_ROOT"
+
+# the Go toolchain: reported, never installed
+if ! command -v go >/dev/null; then
+	fail_row "go" "go is not on PATH — install the toolchain the repo's go.mod names"
+else
+	say "  ok     $(pad "go") $(go version 2>&1 | sed 's/^go version //')"
+
+	gobin="$(go env GOBIN 2>/dev/null || true)"
+	[[ -n "$gobin" ]] || gobin="$(go env GOPATH 2>/dev/null || true)/bin"
+	if found="$(command -v gopls)"; then
+		say "  ok     $(pad "gopls") $found"
+	elif [[ -x "$gobin/gopls" ]]; then
+		say "  warn   $(pad "gopls") $gobin/gopls exists but $gobin is not on PATH"
+		say "         a repo whose .mcp.json names a bare \`gopls\` cannot start it: add $gobin to the PATH claude starts with"
+	else
+		say "  warn   $(pad "gopls") not installed — needed only by a repo whose .mcp.json names a bare \`gopls\`"
+		say "         to install: go install golang.org/x/tools/gopls@latest"
+	fi
+
+	private="$(go env GOPRIVATE 2>/dev/null || true)"
+	note "GOPRIVATE=$private"
+	case ",$private," in
+	*",github.com/$fork_owner,"* | *",github.com/$fork_owner/"* | *",github.com/*,"* | *",github.com,"*)
+		say "  ok     $(pad "GOPRIVATE") $private"
+		;;
+	*)
+		say "  warn   $(pad "GOPRIVATE") ${private:-(empty)} does not cover github.com/$fork_owner"
+		say "         a fork client cannot download its pin: go env -w GOPRIVATE=github.com/$fork_owner/*"
+		;;
+	esac
+fi
+
+# the fork checkout: reported, never cloned
+checkout="${BSC_FORK_PATH:-}"
+if [[ -z "$checkout" ]]; then
+	say "  warn   $(pad "BSC_FORK_PATH") not set — a session can read the fork (the pin) and not edit it"
+	say "         to develop the fork from its client: export BSC_FORK_PATH=<a bsc-geth clone> where claude starts"
+elif grep --quiet --extended-regexp '^module[[:space:]]+github\.com/ethereum/go-ethereum[[:space:]]*$' \
+	"$checkout/go.mod" 2>/dev/null; then
+	say "  ok     $(pad "BSC_FORK_PATH") $checkout"
+else
+	say "  warn   $(pad "BSC_FORK_PATH") $checkout is not a bsc-geth tree: its go.mod does not name github.com/ethereum/go-ethereum"
+fi
+
+finish blockchain-kit-setup

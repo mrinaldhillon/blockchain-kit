@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""blockchain-kit-context — gives a session in a bsc-geth fork client its routing table.
+
+A SessionStart hook (hooks/hooks.json). When the go.mod at or above the session's
+directory replaces go-ethereum with a fork (prediction-bot), it prints, as the hook's
+additionalContext, the body of skills/using-blockchain-kit/SKILL.md and then two lines:
+
+  Fork pin: ...       which fork commit go.mod pins, and whether the fork index was
+                      built at it
+  Fork checkout: ...  the bsc-geth checkout this session edits, where it stands
+                      against the pin, and which of the two the build compiles
+
+Anywhere else it prints nothing, so a session outside a fork client pays nothing. That
+includes a session started in bsc-geth itself: the fork is developed from its client.
+
+It never fails a session: anything unexpected prints nothing and exits 0.
+
+Usage: blockchain-kit-context < hook-input.json     (what Claude Code runs)
+       blockchain-kit-context --help
+Env:   BLOCKCHAIN_KIT_CONTEXT=0 turns it off.
+       BSC_FORK_PATH names the checkout.
+Exit:  0 always for a hook call · 2 usage.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+KIT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(KIT / "lib"))
+
+TABLE = KIT / "skills" / "using-blockchain-kit" / "SKILL.md"
+
+
+def body(text: str) -> str:
+    """The skill without its frontmatter."""
+    if text.startswith("---\n"):
+        text = text.split("\n---\n", 1)[-1]
+    return text.strip()
+
+
+def context(cwd: Path) -> str:
+    import forkpin  # here, inside main's try: a broken lib must not fail the session
+
+    root = forkpin.module_root(cwd)
+    if root is None or not forkpin.is_client(root):
+        return ""
+    text = body(TABLE.read_text(encoding="utf-8"))
+    lines = forkpin.summary(root)
+    return f"{text}\n\n{lines}" if lines else text
+
+
+def main() -> int:
+    if len(sys.argv) > 1:
+        helping = sys.argv[1] in ("-h", "--help")
+        print((__doc__ or "").strip() if helping else "blockchain-kit-context: takes no arguments (see --help)",
+              file=sys.stdout if helping else sys.stderr)
+        return 0 if helping else 2
+    if os.environ.get("BLOCKCHAIN_KIT_CONTEXT") == "0":
+        return 0
+    try:
+        call = json.load(sys.stdin)
+        cwd = Path((call.get("cwd") if isinstance(call, dict) else None) or os.getcwd())
+        text = context(cwd)
+        if text:
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart",
+                                                     "additionalContext": text}}))
+    except Exception:  # noqa: BLE001, S110 - a hook that fails must never fail the session
+        pass
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

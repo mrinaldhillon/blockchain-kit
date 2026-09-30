@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# blockchain-kit-update — bring the installed plugin current, then re-point the
+# stable link.
+#
+#   `plugin marketplace update blockchain-kit`, then
+#   `plugin update blockchain-kit@blockchain-kit`, then the installed version is
+#   READ BACK from installed_plugins.json — a zero exit is not an update.
+# Then: ~/.local/share/blockchain-kit/kit -> the install, so a shell profile's PATH
+# follows the bump.
+#
+# A running session keeps the plugin version it started with; start a new
+# session to pick the update up.
+#
+# Usage: blockchain-kit-update
+# Terse on success, failures in full, the complete log tee'd to a temp file whose
+# path is printed last. Exit: 0 ok · 1 the update failed · 2 usage.
+set -euo pipefail
+
+KIT_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+# shellcheck source=SCRIPTDIR/../lib/blockchain-kit-homes.sh
+. "$KIT_ROOT/lib/blockchain-kit-homes.sh"
+
+case "${1:-}" in
+"") ;;
+-h | --help) sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+*) echo "blockchain-kit-update: unknown argument: $1 (see --help)" >&2; exit 2 ;;
+esac
+
+command -v claude >/dev/null || { echo "blockchain-kit-update: claude CLI not on PATH" >&2; exit 1; }
+open_log blockchain-kit-update
+
+before="$(installed_field version)"
+if [[ -z "$before" ]]; then
+	fail_row "plugin" "blockchain-kit is not installed in $CONFIG_HOME — run blockchain-kit-setup"
+elif ! out="$(claude_in_home plugin marketplace update "$KIT_NAME" 2>&1)"; then
+	fail_row "marketplace update" "$out"
+else
+	note "$out"
+	if ! out="$(claude_in_home plugin update "$KIT_PLUGIN" --scope user 2>&1)"; then
+		fail_row "plugin update" "$out"
+	else
+		note "$out"
+		after="$(installed_field version)"
+		if [[ -z "$after" ]]; then
+			fail_row "plugin" "update reported success but $CONFIG_HOME/plugins/installed_plugins.json has no user-scope $KIT_PLUGIN"
+		elif [[ "$before" == "$after" ]]; then
+			say "  ok     $(pad "plugin") $KIT_PLUGIN $after (already current)"
+		else
+			say "  ok     $(pad "plugin") $KIT_PLUGIN $before -> $after"
+		fi
+	fi
+fi
+
+repoint_link "$KIT_ROOT"
+
+finish blockchain-kit-update
