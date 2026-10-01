@@ -112,7 +112,7 @@ class Guards(unittest.TestCase):
         full.update(more)
         return full
 
-    def assertDenied(self, result: tuple[int, str, str], what: str) -> dict[str, str]:  # noqa: N802
+    def assertDenied(self, result: tuple[int, str, str], what: str) -> dict[str, str]:
         rc, out, err = result
         self.assertEqual((rc, err), (0, ""), what)
         self.assertTrue(out, f"not denied: {what!r}")
@@ -122,10 +122,10 @@ class Guards(unittest.TestCase):
                          {"hookEventName": "PreToolUse", "permissionDecision": "deny"}, what)
         return decision["hookSpecificOutput"]
 
-    def assertAllowed(self, result: tuple[int, str, str], what: str) -> None:  # noqa: N802
+    def assertAllowed(self, result: tuple[int, str, str], what: str) -> None:
         self.assertEqual(result, (0, "", ""), what)
 
-    def assertFailsClosed(self, result: tuple[int, str, str], what: str) -> None:  # noqa: N802
+    def assertFailsClosed(self, result: tuple[int, str, str], what: str) -> None:
         rc, out, err = result
         self.assertEqual((rc, out), (2, ""), what)
         self.assertIn("failing closed", err, what)

@@ -27,7 +27,8 @@ jobs:
       - name: shellcheck
         run: shellcheck bin/blockchain-kit-setup bin/blockchain-kit-update lib/blockchain-kit-homes.sh tests/run
       - name: ruff
-        run: pipx run ruff==0.16.5 check bin hooks lib tests # prediction-bot's pin
+        # bin/ and hooks/ hold extensionless Python that ruff's default include skips
+        run: pipx run ruff==0.16.5 check lib tests $(grep -lE '^#!.*python' bin/* hooks/*) # prediction-bot's pin
       - name: claude plugin validate
         run: |
           npm install --global @anthropic-ai/claude-code
