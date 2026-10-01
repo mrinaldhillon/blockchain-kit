@@ -63,7 +63,7 @@ Consequences:
 | File | Content |
 |---|---|
 | `CLAUDE.md` | Project facts only: what the project is, the commands table, architecture at a glance, the non-negotiable invariants, the environment rule, the standard of evidence, the operator authorizations (merge without asking, privileged prod commands, where to ask), the map of docs. Target at most 150 lines. No routing, tiers, hooks, rotation or pipeline text. One line names blockchain-kit as the steering home. |
-| `.claude/settings.json` | `extraKnownMarketplaces` (the kit's git repo), `enabledPlugins` (the kit on; nothing else listed), `worktree.baseRef: "head"` (§7 depends on it: the default `fresh` starts a lane at `origin/main` — measured), `env` (`GOPRIVATE` and `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`), `enabledMcpjsonServers`, and a `permissions.allow` list trimmed to what remains. No `hooks`, `statusLine`, `outputStyle` or `skillOverrides`. Keys in the order the plugin CLI writes them, so a per-clone install leaves no diff (measured: `plugin install --scope project` rewrites the file). |
+| `.claude/settings.json` | `extraKnownMarketplaces` (the kit's git repo), `enabledPlugins` (the kit on; nothing else listed), `worktree.baseRef: "head"` (§7 depends on it: the default `fresh` starts a lane at `origin/main` — measured), `env` (`GOPRIVATE` and `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`), `enabledMcpjsonServers`, and a `permissions.allow` list trimmed to what remains. No `hooks`, `statusLine`, `outputStyle` or `skillOverrides`. Keys in the order the plugin CLI writes them — `$schema`, `env`, `enabledMcpjsonServers`, `worktree`, `enabledPlugins`, `extraKnownMarketplaces` as observed, with the plugin keys last — so a per-clone install leaves no diff (measured: `plugin install --scope project` rewrites the file). |
 | `.mcp.json` | The pyright server loses its `-p .claude/pyrightconfig.json` argument: with the overlay gone the server exits on it (measured). Otherwise unchanged. The `gopls` and `pyright` servers start the repo's pinned binaries under `dev-setup/`, and the key `gopls` keeps the tool names `mcp__gopls__*` that the kit's agents are granted. |
 | `.gitignore` | Gains `.claude/worktrees/`: lane worktrees live there and the rule that ignores them today is `.claude/.gitignore`, which the cut deletes (measured). |
 | `docs/decisions/` | One new engineering ADR: this repo carries no steering layer; its home is blockchain-kit. |
@@ -306,7 +306,9 @@ plan, §Phase 0 results) unless marked **docs**.
   `subagentStatusLine`, so `env` and `permissions` stay in the project's settings. (docs)
 - With `extraKnownMarketplaces` and `enabledPlugins` committed, an **interactive** session
   registers the marketplace and caches the plugin after folder trust, with no prompt and no
-  install record; it does so in the background, so the kit is live from the second start. A
+  install record; it does so in the background, about five seconds in, so that first
+  session's SessionStart hook is missed. That a second interactive start with no install then
+  has the kit from its first moment is inferred from the cache being in place, not measured. A
   **headless** run loads nothing until `claude plugin install blockchain-kit@blockchain-kit
   --scope project` has run once in that clone.
 - `claude plugin uninstall --scope project` and `claude plugin marketplace remove` empty
