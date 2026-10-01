@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# tests/run — blockchain-kit's tests for bsc-fork, the session-start hook and
-# gofmt-on-edit.
+# tests/run — blockchain-kit's tests: bsc-fork, bk-gate, bk-mainloop-share, setup and
+# update, the session-start hook, the guards, gofmt-on-edit and the implement workflow.
 #
-# When: before committing a change to any of them, or to lib/forkpin.py. What Claude
-# Code does with a hook's answer, and whether a skill or an agent loads, is a live
-# probe in a real session: it costs model calls and is not run here.
+# When: before committing a change to any of them, or to lib/. What Claude Code does
+# with a hook's answer, and whether a skill or an agent loads, is a live probe in a
+# real session: it costs model calls and is not run here.
 #
 # Usage: tests/run [-k PATTERN]
-#   (default)      the hermetic suite: a go.mod, an index and a module cache made in
-#                  a temp directory. No Go toolchain, no network, about a second.
+#   (default)      the hermetic suite: go.mod files, git repos, a socket and a fake
+#                  `claude` made in temp dirs. No Go toolchain, no network.
 #   -k PATTERN     only the tests whose name matches (unittest -k)
 #
 # Output: one line when everything passes; failures in full. The complete log is

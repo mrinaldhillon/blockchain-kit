@@ -1,0 +1,289 @@
+#!/usr/bin/env python3
+"""PreToolUse guard (Bash): on the prod host, deny a bare replay, bot or collector run.
+
+On the host that holds the recorder log, a replay, bot or collector binary started
+straight from the shell runs uncapped beside the collectors that own that
+irreplaceable log. The sanctioned path is
+
+    scripts/replay-run.sh [--mem-max <N>G] [--cpus <N>] -- <binary> [args]
+
+which runs it under cgroup caps. The deny reason says so and names the kill switch.
+
+Host: bkhost.prod_host() (lib/bkhost.py: the geth IPC path, $BLOCKCHAIN_KIT_IPC, is a
+unix socket). Off the prod host, for a tool other than Bash, or for an empty command it
+exits 0 and prints nothing.
+
+Denied, at command position in any segment of the command:
+  - replay, bot, collector-bsc, collector-binance-spot, collector-binance-perp: the
+    basename of the command word, with any path prefix (./bin/bot, /srv/pb/bin/replay);
+  - `go run` with an argument that is a [prefix/]cmd/<name> package path for one of
+    those names (./cmd/bot, cmd/bot/, ./cmd/bot/main.go).
+
+Not denied:
+  - a guarded name in argument position: `scripts/replay-run.sh -- ./bin/replay x`,
+    `ls bin/bot`, `git log -- cmd/bot`, `go build ./cmd/bot`, `echo x > bot`;
+  - a run whose sole argument is -h, --help, -version or --version, in the bare and
+    the `go run` forms;
+  - `command -v <name>`: an existence check is not a run.
+
+Classification. shlex (posix, punctuation_chars, no comment handling) with newline as
+a separator; segments split on ; & && || | |& ( ) and newline; a redirection operator
+consumes the word after it, and a bare file-descriptor number before one is dropped.
+To reach the command word it skips leading VAR=value words, the keywords ! if then
+else elif do while until {, and the wrappers sudo env nohup nice exec time timeout
+stdbuf setsid command, each with its own options (and their values) and, for timeout
+and nice, a duration or number operand. `bash|sh|zsh|dash -c '<program>'` recurses into
+the program, three levels at most.
+
+A shlex parse error (an unterminated quote; a heredoc whose body has an apostrophe
+produces one) does not deny by itself. On that path the raw text is denied only when
+a guarded name appears as a whole path-word (after the start, whitespace, `/`, `;`,
+`&` or `|`, and before whitespace or the end), or when `go run` precedes a
+cmd/<name> mention: over-detection, confined to commands that name a guarded binary.
+
+Residuals: real runs it does not see, and over-detections it keeps.
+  - A command inside a double-quoted $(…) or inside backticks is one word, not a
+    command. (An unquoted $(…) splits on its parentheses and is classified.)
+  - A `python -c` program, or any non-shell interpreter's, is opaque.
+  - A command word produced by expansion (`$BIN --env prod`) is not resolved.
+  - A program run as another program's argument (`xargs bot`, `find … -exec bot`,
+    `watch bot`), and `go run .` from inside cmd/<name>, are not seen.
+  - A function body classifies as if it ran: `f() { bot; }` denies.
+  - A heredoc body is tokenized like the command text: a body line whose first word
+    is a guarded name denies.
+  - A quoted word that is all shell punctuation (`echo ";" bot`) reads as an operator.
+  - A `#` comment is not one: its words are arguments of the command before it, and
+    an operator inside it splits the command.
+This is a footgun guard for an agent following instructions, not a security boundary
+against one evading them. pb's heavy-work class (make targets, `go test ./...`,
+golangci-lint) is not carried here.
+
+A guard: it fails CLOSED. Exit 2 with the reason on stderr on an unparseable payload or
+its own bug, on any host, because a guard that dies must not let the call proceed.
+
+Env:   BLOCKCHAIN_KIT_GUARD_PROD_RUN=0 turns it off.
+       BLOCKCHAIN_KIT_IPC names the IPC path the host test probes.
+Usage: fed the PreToolUse JSON payload on stdin by hooks/hooks.json.
+Exit:  0 allow, or a deny on stdout · 2 failing closed.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shlex
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
+NAME = "guard-prod-run"
+NAMES = frozenset({"replay", "bot", "collector-bsc", "collector-binance-spot", "collector-binance-perp"})
+HELP_FLAGS = frozenset({"-h", "--help", "-version", "--version"})
+SHELLS = frozenset({"bash", "sh", "zsh", "dash"})
+SHELL_VALUE_OPTS = frozenset({"-o", "+o", "-O", "+O"})
+KEYWORDS = frozenset({"!", "if", "then", "else", "elif", "do", "while", "until", "{"})
+# Each wrapper, with the options that take the NEXT word as their value (exact token only:
+# a glued `-n5` or `--signal=KILL` carries its own).
+WRAPPERS: dict[str, frozenset[str]] = {
+    "sudo": frozenset({"-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "-T", "-U"}),
+    "env": frozenset({"-u", "-C", "-S", "--unset", "--chdir", "--split-string"}),
+    "nohup": frozenset(),
+    "nice": frozenset({"-n", "--adjustment"}),
+    "exec": frozenset({"-a"}),
+    "time": frozenset({"-f", "-o", "--format", "--output"}),
+    "timeout": frozenset({"-s", "-k", "--signal", "--kill-after"}),
+    "stdbuf": frozenset({"-i", "-o", "-e", "--input", "--output", "--error"}),
+    "setsid": frozenset(),
+    "command": frozenset(),
+}
+OPERAND = {"timeout": re.compile(r"[0-9]+(\.[0-9]+)?[smhd]?"), "nice": re.compile(r"-?[0-9]+")}
+ASSIGN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
+FD = re.compile(r"[0-9]+")
+MAX_DEPTH = 3
+
+PUNCT = ";&|()<>\n"
+SEPARATORS = frozenset({";", "&", "&&", "||", "|", "|&", "(", ")", "\n", ";;", ";&", ";;&"})
+REDIRECTS = frozenset({"<", ">", ">>", "<<", "<<<", ">&", "<&", "&>", "&>>", ">|", "<>"})
+OPERATORS = sorted(SEPARATORS | REDIRECTS, key=len, reverse=True)
+
+_NAMES_RE = "|".join(sorted(NAMES, key=len, reverse=True))
+RAW_NAME = re.compile(rf"(?:^|(?<=[\s/;&|]))(?:{_NAMES_RE})(?=\s|$)")
+RAW_GO_RUN = re.compile(rf"\bgo\s+run\b[\s\S]*?(?<![\w-])cmd/(?:{_NAMES_RE})(?![\w-])")
+
+REASON = ("guard-prod-run: on the prod host a bare replay, bot or collector binary runs uncapped beside "
+          "the collectors that own the irreplaceable recorder log. Run it through "
+          "scripts/replay-run.sh [--mem-max <N>G] [--cpus <N>] -- <binary> [args], which runs it under "
+          "cgroup caps. If an uncapped run is intended, the operator turns this guard off with "
+          "BLOCKCHAIN_KIT_GUARD_PROD_RUN=0 in the environment Claude Code starts with.")
+
+
+def split_ops(token: str) -> list[str]:
+    """A run of punctuation shlex returned as one token, split into shell operators."""
+    out, i = [], 0
+    while i < len(token):
+        op = next(o for o in OPERATORS if token.startswith(o, i))  # every PUNCT char is an operator
+        out.append(op)
+        i += len(op)
+    return out
+
+
+def tokens(text: str) -> list[str]:
+    """The words and operators of `text`. Raises ValueError on an unterminated quote."""
+    lex = shlex.shlex(text, posix=True, punctuation_chars=PUNCT)
+    lex.whitespace = " \t\r"
+    lex.whitespace_split = True
+    lex.commenters = ""
+    out: list[str] = []
+    for token in lex:
+        if token and all(ch in PUNCT for ch in token):
+            out.extend(split_ops(token))
+        else:
+            out.append(token)
+    return out
+
+
+def segments(toks: list[str]) -> list[list[str]]:
+    """The simple commands' words: split on separators, redirections and their targets removed."""
+    segs: list[list[str]] = [[]]
+    i = 0
+    while i < len(toks):
+        tok = toks[i]
+        if tok in SEPARATORS:
+            segs.append([])
+        elif tok in REDIRECTS:
+            if i + 1 < len(toks) and toks[i + 1] not in SEPARATORS and toks[i + 1] not in REDIRECTS:
+                i += 1
+        elif not (FD.fullmatch(tok) and i + 1 < len(toks) and toks[i + 1] in REDIRECTS):
+            segs[-1].append(tok)
+        i += 1
+    return [seg for seg in segs if seg]
+
+
+def command_word(words: list[str]) -> tuple[str, list[str]] | None:
+    """(the command word's basename, its arguments), past assignments, keywords and
+    wrappers. None when there is none, or for an existence check (`command -v`)."""
+    i = 0
+    while i < len(words):
+        word = words[i]
+        base = word.rsplit("/", 1)[-1]
+        if ASSIGN.match(word) or word in KEYWORDS:
+            i += 1
+            continue
+        if base == "command" and i + 1 < len(words) and words[i + 1] in ("-v", "-V"):
+            return None
+        if base in WRAPPERS:
+            values = WRAPPERS[base]
+            i += 1
+            while i < len(words) and words[i].startswith("-") and len(words[i]) > 1:
+                if words[i] == "--":
+                    i += 1
+                    break
+                i += 2 if words[i] in values else 1
+            if base in OPERAND and i < len(words) and OPERAND[base].fullmatch(words[i]):
+                i += 1
+            continue
+        return base, words[i + 1 :]
+    return None
+
+
+def help_only(args: list[str]) -> bool:
+    """A bounded self-description run: the sole argument is a help or version flag."""
+    return len(args) == 1 and args[0] in HELP_FLAGS
+
+
+def is_cmd_path(word: str) -> bool:
+    """True for a [prefix/]cmd/<name> package path, with a `/` or `/main.go` tail."""
+    head, _, name = word.removesuffix("/main.go").rstrip("/").rpartition("/")
+    return name in NAMES and (head == "cmd" or head.endswith("/cmd"))
+
+
+def go_run_tail(args: list[str]) -> list[str] | None:
+    """The arguments after the cmd/<name> target of `go run`, None when it names none."""
+    for i, arg in enumerate(args):
+        if is_cmd_path(arg):
+            return args[i + 1 :]
+    return None
+
+
+def shell_program(args: list[str]) -> str | None:
+    """The program of `bash -c '<program>'`, None when the shell is not given -c."""
+    given_c = False
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--":
+            return args[i + 1] if given_c and i + 1 < len(args) else None
+        if arg in SHELL_VALUE_OPTS:
+            i += 2
+            continue
+        if arg.startswith("--"):
+            i += 1
+            continue
+        if arg[:1] in ("-", "+") and len(arg) > 1:
+            given_c = given_c or (arg[0] == "-" and "c" in arg[1:])
+            i += 1
+            continue
+        return arg if given_c else None
+    return None
+
+
+def denied(command: str, depth: int = 0) -> bool:
+    """True when `command` starts a guarded binary at command position."""
+    try:
+        toks = tokens(command)
+    except ValueError:
+        return bool(RAW_NAME.search(command) or RAW_GO_RUN.search(command))
+    for words in segments(toks):
+        found = command_word(words)
+        if found is None:
+            continue
+        base, args = found
+        if base in NAMES and not help_only(args):
+            return True
+        if base == "go" and args[:1] == ["run"]:
+            tail = go_run_tail(args[1:])
+            if tail is not None and not help_only(tail):
+                return True
+        if base in SHELLS and depth < MAX_DEPTH:
+            program = shell_program(args)
+            if program is not None and denied(program, depth + 1):
+                return True
+    return False
+
+
+def main() -> int:
+    if os.environ.get("BLOCKCHAIN_KIT_GUARD_PROD_RUN") == "0" or sys.stdin.isatty():
+        return 0
+    body = json.load(sys.stdin)
+    if not isinstance(body, dict):
+        raise TypeError("the payload is not an object")
+    import bkhost  # here, inside main's try: a broken lib fails closed
+
+    if body.get("tool_name") != "Bash" or not bkhost.prod_host():
+        return 0
+    tool_input = body.get("tool_input") or {}
+    if not isinstance(tool_input, dict):
+        raise TypeError("tool_input is not an object")
+    command = tool_input.get("command") or ""
+    if not isinstance(command, str):
+        raise TypeError("tool_input.command is not a string")
+    if not command.strip() or not denied(command):
+        return 0
+
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "deny",
+        "permissionDecisionReason": REASON,
+    }}))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as err:  # noqa: BLE001 - a guard fails CLOSED
+        print(f"{NAME}: failing closed: {err}", file=sys.stderr)
+        sys.exit(2)

@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
-# blockchain-kit-update — bring the installed plugin current, then re-point the
-# stable link.
+# blockchain-kit-update — bring the installed plugin of one scope current, then
+# re-point the stable link.
 #
 #   `plugin marketplace update blockchain-kit`, then
-#   `plugin update blockchain-kit@blockchain-kit`, then the installed version is
-#   READ BACK from installed_plugins.json — a zero exit is not an update.
-# Then: ~/.local/share/blockchain-kit/kit -> the install, so a shell profile's PATH
+#   `plugin update blockchain-kit@blockchain-kit --scope <scope>` (project scope: run
+#   from the clone), then the installed version is READ BACK from
+#   installed_plugins.json — a zero exit is not an update. The row says
+#   `<before> -> <after>`, or `(already current)`.
+# Then: ~/.local/share/blockchain-kit/kit -> that install, so a shell profile's PATH
 # follows the bump.
 #
 # A running session keeps the plugin version it started with; start a new
 # session to pick the update up.
 #
-# Usage: blockchain-kit-update
+# Usage: blockchain-kit-update [--scope user|project] [--project DIR]
+#   --scope S        user (default) or project: the install to update
+#   --project DIR    the clone, with --scope project (default: the git top level of
+#                    the cwd; neither → usage error)
 # Terse on success, failures in full, the complete log tee'd to a temp file whose
 # path is printed last. Exit: 0 ok · 1 the update failed · 2 usage.
 set -euo pipefail
@@ -20,29 +25,33 @@ KIT_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 # shellcheck source=SCRIPTDIR/../lib/blockchain-kit-homes.sh
 . "$KIT_ROOT/lib/blockchain-kit-homes.sh"
 
-case "${1:-}" in
-"") ;;
--h | --help) sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
-*) echo "blockchain-kit-update: unknown argument: $1 (see --help)" >&2; exit 2 ;;
-esac
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	--scope) KIT_SCOPE="${2:?--scope needs a value}"; shift 2 ;;
+	--project) KIT_PROJECT="${2:?--project needs a value}"; shift 2 ;;
+	-h | --help) sed -n '2,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	*) echo "blockchain-kit-update: unknown argument: $1 (see --help)" >&2; exit 2 ;;
+	esac
+done
+resolve_scope blockchain-kit-update
 
 command -v claude >/dev/null || { echo "blockchain-kit-update: claude CLI not on PATH" >&2; exit 1; }
 open_log blockchain-kit-update
 
-before="$(installed_field version)"
+before="$(installed_field version "$KIT_SCOPE" "$KIT_PROJECT")"
 if [[ -z "$before" ]]; then
-	fail_row "plugin" "blockchain-kit is not installed in $CONFIG_HOME — run blockchain-kit-setup"
+	fail_row "plugin" "$CONFIG_HOME has no $(scope_label) install of $KIT_PLUGIN — run blockchain-kit-setup --scope $KIT_SCOPE"
 elif ! out="$(claude_in_home plugin marketplace update "$KIT_NAME" 2>&1)"; then
 	fail_row "marketplace update" "$out"
 else
 	note "$out"
-	if ! out="$(claude_in_home plugin update "$KIT_PLUGIN" --scope user 2>&1)"; then
+	if ! out="$(claude_scoped plugin update "$KIT_PLUGIN" --scope "$KIT_SCOPE" 2>&1)"; then
 		fail_row "plugin update" "$out"
 	else
 		note "$out"
-		after="$(installed_field version)"
+		after="$(installed_field version "$KIT_SCOPE" "$KIT_PROJECT")"
 		if [[ -z "$after" ]]; then
-			fail_row "plugin" "update reported success but $CONFIG_HOME/plugins/installed_plugins.json has no user-scope $KIT_PLUGIN"
+			fail_row "plugin" "update reported success but $CONFIG_HOME/plugins/installed_plugins.json has no $(scope_label) $KIT_PLUGIN"
 		elif [[ "$before" == "$after" ]]; then
 			say "  ok     $(pad "plugin") $KIT_PLUGIN $after (already current)"
 		else

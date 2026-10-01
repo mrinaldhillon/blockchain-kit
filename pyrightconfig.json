@@ -1,5 +1,5 @@
 {
-  "include": ["lib", "bin/bsc-fork", "bin/blockchain-kit-context", "hooks/gofmt-on-edit", "hooks/guard-node-secrets", "tests"],
+  "include": ["lib", "bin/bsc-fork", "bin/blockchain-kit-context", "bin/bk-gate", "bin/bk-mainloop-share", "hooks/gofmt-on-edit", "hooks/guard-secrets", "hooks/guard-prod-run", "tests"],
   "extraPaths": ["lib"],
   "pythonVersion": "3.9"
 }
