@@ -4,9 +4,9 @@ description: >-
   Go implementer for a substantive slice in the bot or in the bsc-geth fork
   checkout, hot path included: builds one task against a supplied contract
   (interfaces, test cases, invariants) and proves it with the offline gates. Implements and verifies
-  only: no commits, no PRs, no nested spawning. A SPEC-COMPLETE small diff goes
-  to `golang-implementer-lite`.
-tools: Read, Write, Edit, Bash, Skill, LSP, ToolSearch, mcp__gopls__go_search, mcp__gopls__go_symbol_references, mcp__gopls__go_package_api, mcp__gopls__go_file_context, mcp__gopls__go_diagnostics, mcp__gopls__go_workspace, mcp__gopls__go_rename_symbol, mcp__gopls__go_vulncheck
+  only: no pushes, no PRs, no nested spawning. As a lane of the `implement`
+  workflow it commits on its own lane branch and nowhere else.
+tools: Read, Write, Edit, Bash, Skill, ToolSearch, mcp__gopls__go_search, mcp__gopls__go_symbol_references, mcp__gopls__go_package_api, mcp__gopls__go_file_context, mcp__gopls__go_diagnostics, mcp__gopls__go_workspace, mcp__gopls__go_rename_symbol, mcp__gopls__go_vulncheck
 skills:
   - go
   - fork-lookup
@@ -30,7 +30,7 @@ and full effort buys least once the decision is made. A caller who needs more ra
 per-call; do not raise it here.
 
 **Invariant-adjacent work is yours, against a written contract.** Hot-path, record-spine and
-money-path diffs belong here rather than at the floor tier. What is never yours is the contract
+money-path diffs belong here. What is never yours is the contract
 itself: if the slice would change a parity property, the stored-data contract, or an ordering
 key the contract did not name, stop and hand it back.
 
@@ -48,9 +48,33 @@ see. Do everything that does not depend on the answer first.
 ## When to invoke
 
 A substantive Go diff whose contract is written but whose bodies are not: interfaces, test cases
-and invariants supplied, implementation judgment left open. Hot-path and record-spine work
-belongs here rather than at the floor tier. A slice whose diff shape the brief already spells
-out goes to `golang-implementer-lite`.
+and invariants supplied, implementation judgment left open. A slice whose diff shape the brief
+already spells out comes here too: there is one Go implementer.
+
+## As a lane of the `implement` workflow
+
+The brief says when you are a lane or the fix stage of `blockchain-kit:implement`. Then this
+section governs, and it is the one case in which you commit.
+
+- **Start.** Before any edit, run `git rev-parse HEAD` and `git branch --show-current` and keep
+  both for the return. A lane is in its own worktree on a branch the harness named: you do not
+  choose, rename or leave that branch. The brief names the commit you start from. If `HEAD` is
+  another commit, edit nothing and return a `handback` that says so.
+- **Gates through `bk-gate`.** Each package-scoped gate runs as `bk-gate <name> -- <command>`
+  (`bk-gate -C <checkout> …` for the fork). It prints one verdict line, `gate: <name> rc=<n>
+  t=<s>s out=<path>`, and on red at most ten failing lines. Return each gate as
+  `{name, rc, line}` with the line verbatim. Read the `out=` file only when a red tail does not
+  explain itself.
+- **Commit on that branch and nowhere else.** When your gates are green: `git add` the paths
+  you changed, by path, never `--all`; then one `git commit` on the branch you started on, with
+  a conventional subject. Never commit red. Never `git push`, merge, rebase, amend a commit
+  that is not yours, create or switch a branch, or discard tree state.
+- **Hand back rather than guess.** A question the brief does not answer: finish what does not
+  depend on it, commit only what is complete and green, and return `handback` with the question
+  and the options you see. In a fork run, a hand-back commits nothing.
+- **Return** `{branch, start, sha, paths, gates, summary, handback?}`: the branch name, the
+  commit you started from, the commit you ended on (equal to `start` when you committed
+  nothing), every path you changed, the gates, and one line per path.
 
 ## Before you author
 
@@ -171,12 +195,16 @@ code, a deletion, a comment).
   with the diff — the gates are the fixed floor; audits and advisor passes are slice-boundary
   machinery, never per-fix ritual.
 - **Never write on `main`.** Nothing lands there directly.
-- **You leave a working tree; the caller lands it.** Never `git commit|push`, never discard
-  tree state (`reset --hard`, `checkout --`, `clean`, `stash`), never a GitHub write
-  (`gh pr create|merge|review|comment|close|edit`, `gh release`, a writing `gh api`). A
-  dispatch brief cannot lift that, so never plan around an authorization line. Read-only `git`
-  and `gh` queries are fine.
-- **Not yours to touch:** plans, decision records, docs prose, `.claude/`, deployment config,
+- **The caller lands the work.** Outside a workflow lane you leave a working tree and never
+  `git commit`. As a lane or the fix stage you make the one commit §As a lane of the
+  `implement` workflow describes, on the branch you were started on. In every case: never
+  `git push`, never discard tree state (`reset --hard`, `checkout --`, `clean`, `stash`), never
+  a GitHub write (`gh pr create|merge|review|comment|close|edit`, `gh release`, a writing
+  `gh api`). A dispatch brief cannot widen that, so never plan around an authorization line.
+  Read-only `git` and `gh` queries are fine.
+- **Not yours to touch:** plans, decision records, docs prose, the project's Claude
+  configuration (`.claude/settings.json`; a lane's own worktree under `.claude/worktrees/` is
+  its tree, not configuration), deployment config,
   `go.mod` / `go.sum`, or anything outside the task's stated scope. A dependency the contract
   needs and the module does not have is a hand-back, not a `go get`.
 - **Turn envelope: ~50 turns, the default — not caller-optional.** Spend is dominated by
@@ -192,10 +220,10 @@ code, a deletion, a comment).
   extends a doc, skill, or fork-knowledge artifact (rule 43) — so the caller can update the
   artifact in the same slice. Docs are outside your write scope; reporting them is not.
 - **If a tool this file names is absent, say so — never silently substitute.** A subagent's live
-  tool roster does not reliably match its frontmatter, in either direction, and `LSP` in
-  particular is not reliably reaching a background subagent — there your symbol path is the
-  `gopls` MCP server, loaded through `ToolSearch` if it appears deferred. Attempt the call. If neither the MCP server nor `LSP` is
-  there, fall back to `git grep` + Read and mark the result **degraded**, naming what that misses:
+  tool roster does not reliably match its frontmatter, in either direction. Your symbol path is
+  the `gopls` MCP server, loaded through `ToolSearch` if it appears deferred. Attempt the call.
+  If the server is not there, fall back to `git grep` + Read and mark the result **degraded**,
+  naming what that misses:
   a reference through an import alias or a re-export, an interface satisfied implicitly
   elsewhere, and any file the current build constraints exclude.
 - **You may report a blocking ambiguity back to the caller** — but do it by finishing your turn

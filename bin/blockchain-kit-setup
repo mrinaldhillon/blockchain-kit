@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# blockchain-kit-setup — once per machine: the plugin in the Claude Code config
-# home, and a report on the Go toolchain the kit's skills and agents assume.
-# Idempotent; re-run freely.
+# blockchain-kit-setup — once per machine (user scope) or per clone (project scope):
+# the plugin in the Claude Code config home, and a report on the Go toolchain the
+# kit's skills and agents assume. Idempotent; re-run freely.
 #
 # Steps, in order:
 #   plugin     `plugin marketplace add` if the home does not know the marketplace,
-#              then `plugin install --scope user` if not installed; the version is
-#              READ BACK from installed_plugins.json — a zero exit is not an install
+#              then `plugin install --scope <scope>` if that scope has no install
+#              (project scope: run from the clone, matched by projectPath); the
+#              version is READ BACK from installed_plugins.json — a zero exit is
+#              not an install
+#   settings.json  project scope, when it installed: whether the install changed
+#              the clone's .claude/settings.json (sha256 before and after) — a warn
+#              naming `git -C <clone> diff -- .claude/settings.json` when it did
 #   link       ~/.local/share/blockchain-kit/kit -> the installed plugin (stable
 #              across version bumps, for a shell profile's PATH)
 #   go         `go version` — reported, never installed
@@ -22,7 +27,12 @@
 #
 # The config home is $CLAUDE_CONFIG_DIR when set, else ~/.claude.
 #
-# Usage: blockchain-kit-setup [--source OWNER/REPO|PATH] [--fork-owner OWNER]
+# Usage: blockchain-kit-setup [--scope user|project] [--project DIR]
+#                             [--source OWNER/REPO|PATH] [--fork-owner OWNER]
+#   --scope S        user (default): one install for every session of this config
+#                    home; project: an install for one clone
+#   --project DIR    the clone, with --scope project (default: the git top level of
+#                    the cwd; neither → usage error)
 #   --source S       marketplace source for a home that lacks it (default
 #                    mrinaldhillon/blockchain-kit; $BLOCKCHAIN_KIT_MARKETPLACE_SOURCE)
 #   --fork-owner O   the GitHub owner GOPRIVATE must cover (default mrinaldhillon)
@@ -38,19 +48,34 @@ KIT_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 fork_owner=mrinaldhillon
 while [[ $# -gt 0 ]]; do
 	case "$1" in
+	--scope) KIT_SCOPE="${2:?--scope needs a value}"; shift 2 ;;
+	--project) KIT_PROJECT="${2:?--project needs a value}"; shift 2 ;;
 	--source) KIT_MARKETPLACE_SOURCE="${2:?--source needs a value}"; shift 2 ;;
 	--fork-owner) fork_owner="${2:?--fork-owner needs a value}"; shift 2 ;;
-	-h | --help) sed -n '2,31p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h | --help) sed -n '2,41p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	*) echo "blockchain-kit-setup: unknown argument: $1 (see --help)" >&2; exit 2 ;;
 	esac
 done
+resolve_scope blockchain-kit-setup
 
 command -v claude >/dev/null || { echo "blockchain-kit-setup: claude CLI not on PATH" >&2; exit 1; }
 open_log blockchain-kit-setup
 
+# settings_sha — the sha256 of the clone's .claude/settings.json, `absent` without one.
+settings_sha() {
+	local file="$KIT_PROJECT/.claude/settings.json"
+	if [[ ! -f "$file" ]]; then
+		echo absent
+	elif command -v sha256sum >/dev/null; then
+		sha256sum <"$file" | cut -d' ' -f1
+	else
+		shasum -a 256 <"$file" | cut -d' ' -f1
+	fi
+}
+
 # plugin
 install_plugin() {
-	local out version
+	local out version settings_before=""
 	if ! has_marketplace; then
 		if out="$(claude_in_home plugin marketplace add "$KIT_MARKETPLACE_SOURCE" 2>&1)"; then
 			note "$out"
@@ -60,20 +85,28 @@ install_plugin() {
 			return
 		fi
 	fi
-	version="$(installed_field version)"
+	version="$(installed_field version "$KIT_SCOPE" "$KIT_PROJECT")"
 	if [[ -z "$version" ]]; then
-		if out="$(claude_in_home plugin install "$KIT_PLUGIN" --scope user 2>&1)"; then
+		[[ "$KIT_SCOPE" != project ]] || settings_before="$(settings_sha)"
+		if out="$(claude_scoped plugin install "$KIT_PLUGIN" --scope "$KIT_SCOPE" 2>&1)"; then
 			note "$out"
-			version="$(installed_field version)"
+			version="$(installed_field version "$KIT_SCOPE" "$KIT_PROJECT")"
 		else
 			fail_row "plugin install" "$out"
 			return
 		fi
 	fi
 	if [[ -n "$version" ]]; then
-		say "  ok     $(pad "plugin") $KIT_PLUGIN $version ($CONFIG_HOME)"
+		say "  ok     $(pad "plugin") $KIT_PLUGIN $version ($CONFIG_HOME, $(scope_label))"
 	else
-		fail_row "plugin" "install reported success but $CONFIG_HOME/plugins/installed_plugins.json has no user-scope $KIT_PLUGIN"
+		fail_row "plugin" "install reported success but $CONFIG_HOME/plugins/installed_plugins.json has no $(scope_label) $KIT_PLUGIN"
+	fi
+	if [[ -n "$settings_before" ]]; then
+		if [[ "$(settings_sha)" == "$settings_before" ]]; then
+			say "  ok     $(pad "settings.json") unchanged by the install"
+		else
+			say "  warn   $(pad "settings.json") changed by the install — read it with: git -C $KIT_PROJECT diff -- .claude/settings.json"
+		fi
 	fi
 }
 install_plugin

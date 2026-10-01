@@ -3,12 +3,31 @@
 
 A SessionStart hook (hooks/hooks.json). When the go.mod at or above the session's
 directory replaces go-ethereum with a fork (prediction-bot), it prints, as the hook's
-additionalContext, the body of skills/using-blockchain-kit/SKILL.md and then two lines:
+additionalContext, the body of skills/using-blockchain-kit/SKILL.md and then these
+lines, in this order:
 
-  Fork pin: ...       which fork commit go.mod pins, and whether the fork index was
-                      built at it
-  Fork checkout: ...  the bsc-geth checkout this session edits, where it stands
-                      against the pin, and which of the two the build compiles
+  Fork pin: ...         which fork commit go.mod pins, and whether the fork index was
+                        built at it
+  Fork checkout: ...    the bsc-geth checkout this session edits, where it stands
+                        against the pin, and which of the two the build compiles
+  blockchain-kit: ...   the kit's own version: `installed at <sha12>` when the kit's
+                        directory is named by a 12-hex SHA (a plugin install), else
+                        `running from the checkout <kit> at <sha12>` when the kit is
+                        the top of a git checkout; omitted when neither holds
+  Host: ...             PRODUCTION when the geth IPC path is a unix socket (the
+                        recorder archive is on this host), else dev; lib/bkhost.py
+  Git guard: ...        only when the main-ref guard is off in the client's checkout:
+                        core.hooksPath unset, its reference-transaction hook missing,
+                        or that hook not executable (a relative hooksPath resolves
+                        against the module root). Omitted outside a git work tree
+  Stray steering: ...   only when `git ls-files .claude` at the module root lists
+                        anything but .claude/settings.json: one line with the count
+                        and up to three paths
+
+Each of the last four is computed on its own: one that fails is omitted and never
+drops the others or the table. Every git query has a two second timeout, cut short so
+the whole hook stays inside its five second budget, and a line is capped at 400
+characters, so the context stays under 10,000.
 
 Anywhere else it prints nothing, so a session outside a fork client pays nothing. That
 includes a session started in bsc-geth itself: the fork is developed from its client.
@@ -19,6 +38,7 @@ Usage: blockchain-kit-context < hook-input.json     (what Claude Code runs)
        blockchain-kit-context --help
 Env:   BLOCKCHAIN_KIT_CONTEXT=0 turns it off.
        BSC_FORK_PATH names the checkout.
+       BLOCKCHAIN_KIT_IPC names the geth IPC path (default /run/geth/geth.ipc).
 Exit:  0 always for a hook call · 2 usage.
 """
 
@@ -26,7 +46,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -34,6 +57,90 @@ KIT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(KIT / "lib"))
 
 TABLE = KIT / "skills" / "using-blockchain-kit" / "SKILL.md"
+STARTED = time.monotonic()
+BUDGET_S = 4.0  # of the hook's 5 s timeout (hooks/hooks.json)
+GIT_TIMEOUT_S = 2.0
+LINE_MAX = 400
+HEX12 = re.compile(r"[0-9a-f]{12}")
+GUARD_HOOK = "reference-transaction"
+
+
+def git(tree: Path, *args: str) -> subprocess.CompletedProcess[str] | None:
+    """A read-only git query, None when it cannot run or the budget is spent."""
+    left = BUDGET_S - (time.monotonic() - STARTED)
+    if left <= 0:
+        return None
+    try:
+        return subprocess.run(["git", "-C", str(tree), *args], capture_output=True, text=True, check=False,
+                              timeout=min(GIT_TIMEOUT_S, left), env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"})
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def kit_line() -> str:
+    if HEX12.fullmatch(KIT.name):
+        return f"blockchain-kit: installed at {KIT.name}."
+    done = git(KIT, "rev-parse", "--show-toplevel", "--short=12", "HEAD")
+    seen = done.stdout.splitlines() if done is not None and done.returncode == 0 else []
+    if len(seen) == 2 and Path(seen[0]).resolve() == KIT and HEX12.fullmatch(seen[1]):
+        return f"blockchain-kit: running from the checkout {KIT} at {seen[1]}."
+    return ""
+
+
+def host_line() -> str:
+    import bkhost
+
+    ipc = bkhost.ipc_path()
+    if bkhost.prod_host():
+        return (f"Host: PRODUCTION — geth IPC live at {ipc}; the recorder archive is on this host. "
+                "Tests run offline against fixtures.")
+    return f"Host: dev — no geth IPC at {ipc}."
+
+
+def git_guard_line(root: Path) -> str:
+    inside = git(root, "rev-parse", "--is-inside-work-tree")
+    if inside is None or inside.returncode != 0 or inside.stdout.strip() != "true":
+        return ""
+    got = git(root, "config", "--get", "core.hooksPath")
+    if got is None or got.returncode not in (0, 1):
+        return ""
+    configured = got.stdout.strip() if got.returncode == 0 else ""
+    if not configured:
+        return ("Git guard: core.hooksPath is unset — the main-ref guard is NOT armed in this checkout; "
+                "run make tools.")
+    directory = Path(configured).expanduser()
+    hook = (directory if directory.is_absolute() else root / directory) / GUARD_HOOK
+    if not hook.is_file():
+        return (f"Git guard: {configured} has no {GUARD_HOOK} hook — the main-ref guard is NOT armed; "
+                "run make tools.")
+    if not os.access(hook, os.X_OK):
+        return f"Git guard: {hook} is not executable — git ignores it silently."
+    return ""
+
+
+def stray_line(root: Path) -> str:
+    done = git(root, "ls-files", "-z", "--", ".claude")
+    if done is None or done.returncode != 0:
+        return ""
+    stray = [p for p in done.stdout.split("\0") if p and p != ".claude/settings.json"]
+    if not stray:
+        return ""
+    shown = ", ".join(stray[:3]) + (", …" if len(stray) > 3 else "")
+    return (f"Stray steering: {len(stray)} tracked file(s) under .claude/ besides settings.json ({shown}). "
+            "blockchain-kit is the one steering home.")
+
+
+def extra_lines(root: Path) -> list[str]:
+    """The kit, host, git-guard and stray-steering lines; each one fails alone."""
+    out = []
+    for make in (kit_line, host_line, lambda: git_guard_line(root), lambda: stray_line(root)):
+        try:
+            line = make()
+        except Exception:  # noqa: BLE001, S112 - one line that fails never drops the others
+            continue
+        if line:
+            out.append(line if len(line) <= LINE_MAX else line[: LINE_MAX - 1] + "…")
+    return out
 
 
 def body(text: str) -> str:
@@ -50,7 +157,7 @@ def context(cwd: Path) -> str:
     if root is None or not forkpin.is_client(root):
         return ""
     text = body(TABLE.read_text(encoding="utf-8"))
-    lines = forkpin.summary(root)
+    lines = "\n".join(line for line in (forkpin.summary(root), *extra_lines(root)) if line)
     return f"{text}\n\n{lines}" if lines else text
 
 

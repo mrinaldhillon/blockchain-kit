@@ -5,9 +5,11 @@ description: Use when changing the bsc-geth fork itself from a prediction-bot se
 
 # Developing the fork from its client
 
-bsc-geth carries no Claude steering of its own: no `CLAUDE.md`, no `.claude/`. It is
-developed from a prediction-bot session, for prediction-bot and nothing else. What the
-fork's own steering used to say is in this skill and three others:
+bsc-geth is developed from a prediction-bot session, for prediction-bot and nothing else. A
+session rooted there loads none of the fork's own `CLAUDE.md` or `.claude/`. The target is a
+fork that carries neither; until they are deleted from `mrinal/dev` they are still in the
+tree, and they are not the rule. What they said about the fork is in this skill and three
+others:
 
 | Load | When |
 |---|---|

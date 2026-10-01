@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""bk-gate — run one gate command; print one verdict line and, on red, its last ten lines.
+
+Usage: bk-gate [-C DIR] <name> -- <command> [args...]
+       bk-gate --help
+
+  -C DIR   run the command in DIR (default: the caller's cwd; no repo root is looked up,
+           so a fork lane passes -C <fork checkout>)
+  <name>   names the gate in the verdict line and in the output file's name; every
+           character outside [A-Za-z0-9_.-] becomes `_`
+
+Contract:
+  1. Runs <command> in argv form: no shell, stdin closed, stdout and stderr merged,
+     fully buffered, wall-timed. It sets no timeout of its own; wrap the call in
+     `timeout <s>` when one is wanted.
+  2. Writes the whole output to
+       ${TMPDIR:-/var/tmp}/bk-gate-<name>-<YYYYmmddTHHMMSS>-<pid>.out   (UTC stamp)
+  3. Prints exactly one verdict line first:
+       gate: <name> rc=<n> t=<S>s out=<path>      (S = wall seconds, one decimal)
+     On rc 0, nothing else: read the out file for the body. On rc != 0, the LAST ten
+     lines of the output at most, and nothing else. Other tools parse this line (the
+     implement workflow reads rc=): its shape is stable.
+  4. Exits with the command's rc. A command killed by signal N reports rc=128+N and
+     exits with it. A command that cannot be spawned (not found, not executable, DIR
+     absent) prints `gate: <name> rc=127 t=<S>s out=-`, the OS error on one stderr
+     line, and exits 127. When the out file cannot be written the line says out=-,
+     stderr says why, and the rc is still the command's.
+
+A usage error (no name, no `--`, no command, an unknown leading option) prints one
+`bk-gate: ...` line on stderr and no verdict line.
+
+Exit: the command's rc · 128+N killed by signal N · 127 not spawned · 2 usage.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+UNSAFE = re.compile(r"[^A-Za-z0-9_.-]")
+TAIL = 10
+
+
+class Usage(Exception):
+    """A command line this tool does not accept."""
+
+
+def parse(argv: list[str]) -> tuple[str | None, str, list[str]] | None:
+    """(DIR or None, name, command); None when help was asked for. Raises Usage."""
+    cwd: str | None = None
+    i = 0
+    while i < len(argv) and argv[i].startswith("-") and argv[i] != "--":
+        if argv[i] in ("-h", "--help"):
+            return None
+        if argv[i] != "-C":
+            raise Usage(f"unknown option {argv[i]}")
+        if i + 1 >= len(argv):
+            raise Usage("-C needs a directory")
+        cwd, i = argv[i + 1], i + 2
+    if i >= len(argv) or argv[i] == "--" or not argv[i]:
+        raise Usage("no gate name")
+    name = UNSAFE.sub("_", argv[i])
+    if i + 1 >= len(argv) or argv[i + 1] != "--":
+        raise Usage(f"no `--` after the name {argv[i]!r}")
+    command = argv[i + 2 :]
+    if not command:
+        raise Usage("no command after `--`")
+    return cwd, name, command
+
+
+def emit(text: str) -> None:
+    sys.stdout.buffer.write(text.encode("utf-8", "surrogateescape") + b"\n")
+
+
+def main(argv: list[str]) -> int:
+    try:
+        parsed = parse(argv)
+    except Usage as err:
+        print(f"bk-gate: {err} — usage: bk-gate [-C DIR] <name> -- <command> [args...]", file=sys.stderr)
+        return 2
+    if parsed is None:
+        print((__doc__ or "").strip())
+        return 0
+    cwd, name, command = parsed
+
+    started = time.monotonic()
+    try:
+        proc = subprocess.run(command, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, check=False)
+    except OSError as err:
+        emit(f"gate: {name} rc=127 t={time.monotonic() - started:.1f}s out=-")
+        sys.stdout.flush()
+        print(f"bk-gate: {name}: {err}", file=sys.stderr)
+        return 127
+    elapsed = time.monotonic() - started
+    rc = proc.returncode if proc.returncode >= 0 else 128 - proc.returncode
+    raw = proc.stdout or b""
+
+    stamp = time.strftime("%Y%m%dT%H%M%S", time.gmtime())
+    out = Path(os.environ.get("TMPDIR") or "/var/tmp") / f"bk-gate-{name}-{stamp}-{os.getpid()}.out"
+    shown = str(out)
+    try:
+        out.write_bytes(raw)
+    except OSError as err:
+        shown = "-"
+        print(f"bk-gate: {name}: cannot write {out}: {err.strerror}", file=sys.stderr)
+
+    emit(f"gate: {name} rc={rc} t={elapsed:.1f}s out={shown}")
+    if rc != 0:
+        body = raw.rstrip(b"\n")
+        for line in body.split(b"\n")[-TAIL:] if body else []:
+            sys.stdout.buffer.write(line + b"\n")
+    sys.stdout.flush()
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

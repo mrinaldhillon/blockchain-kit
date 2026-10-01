@@ -9,6 +9,12 @@
 # The default home runs with CLAUDE_CONFIG_DIR UNSET, never set to ~/.claude:
 # setting it moves the global config from ~/.claude.json to ~/.claude/.claude.json,
 # which is a different MCP server list.
+#
+# The install scope: KIT_SCOPE (user, the default, or project) and, for project,
+# KIT_PROJECT, the clone the install belongs to. A caller sets both from --scope and
+# --project, then calls resolve_scope. A project-scope install is recorded in the
+# home's installed_plugins.json with scope "project" and the clone as projectPath;
+# `claude plugin install|update --scope project` acts on the clone it is run from.
 
 KIT_NAME=blockchain-kit
 KIT_PLUGIN="blockchain-kit@blockchain-kit"
@@ -27,8 +33,48 @@ else
 	CONFIG_HOME_EXPLICIT=0
 fi
 
+KIT_SCOPE=user
+KIT_PROJECT=""
 LOG=""
 FAILED=0
+
+# resolve_scope <tool-name> — validate KIT_SCOPE; for project, resolve KIT_PROJECT
+# (default: the git top level of the cwd) to a physical path. Exits 2 on a usage error.
+resolve_scope() {
+	local named="$KIT_PROJECT"
+	case "$KIT_SCOPE" in
+	user)
+		if [[ -n "$named" ]]; then
+			echo "$1: --project applies to --scope project only (see --help)" >&2
+			exit 2
+		fi
+		;;
+	project)
+		[[ -n "$named" ]] || named="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+		if [[ -z "$named" ]]; then
+			echo "$1: --scope project needs --project DIR, or a cwd inside the clone's git work tree (see --help)" >&2
+			exit 2
+		fi
+		if ! KIT_PROJECT="$(cd "$named" 2>/dev/null && pwd -P)"; then
+			echo "$1: --project $named is not a directory" >&2
+			exit 2
+		fi
+		;;
+	*)
+		echo "$1: --scope must be user or project, not '$KIT_SCOPE' (see --help)" >&2
+		exit 2
+		;;
+	esac
+}
+
+# scope_label — `user-scope`, or `project-scope (<clone>)`, for a row.
+scope_label() {
+	if [[ "$KIT_SCOPE" == project ]]; then
+		printf 'project-scope (%s)' "$KIT_PROJECT"
+	else
+		printf 'user-scope'
+	fi
+}
 
 open_log() { # open_log <tool-name>
 	LOG="$(mktemp -t "$1.XXXXXX")"
@@ -52,14 +98,26 @@ claude_in_home() {
 	fi
 }
 
-# json_get <file> <python-expr over `d`> — prints the value, empty when absent.
+# claude_scoped <args...> — claude_in_home, run from KIT_PROJECT when the scope is
+# project: `plugin install|update --scope project` acts on the clone it runs in.
+claude_scoped() {
+	if [[ "$KIT_SCOPE" == project ]]; then
+		(cd "$KIT_PROJECT" && claude_in_home "$@")
+	else
+		claude_in_home "$@"
+	fi
+}
+
+# json_get <file> <python-expr> [arg...] — prints the value, empty when absent. The
+# expression sees `d` (the parsed file), `a` (the args, a list of str) and `os`; pass
+# a value as an arg, never spliced into the expression.
 json_get() {
 	[[ -f "$1" ]] || return 0
-	python3 - "$1" "$2" <<'PY' 2>/dev/null || true
-import json, sys
+	python3 - "$@" <<'PY' 2>/dev/null || true
+import json, os, sys
 try:
     d = json.load(open(sys.argv[1]))
-    v = eval(sys.argv[2], {"d": d})
+    v = eval(sys.argv[2], {"d": d, "a": sys.argv[3:], "os": os})
 except Exception:
     v = None
 print("" if v is None else v)
@@ -67,20 +125,23 @@ PY
 }
 
 has_marketplace() {
-	[[ -n "$(json_get "$CONFIG_HOME/plugins/known_marketplaces.json" "'yes' if '$KIT_NAME' in d else None")" ]]
+	[[ -n "$(json_get "$CONFIG_HOME/plugins/known_marketplaces.json" "'yes' if a[0] in d else None" "$KIT_NAME")" ]]
 }
 
-# The user-scope install's version / installPath, empty when not installed.
-installed_field() { # installed_field <version|installPath>
+# installed_field <version|installPath> [scope] [project-root] — the field of the
+# install of that scope (default user), empty when there is none. A project-scope
+# install matches only when realpath(projectPath) == realpath(project-root).
+installed_field() {
 	json_get "$CONFIG_HOME/plugins/installed_plugins.json" \
-		"next((e.get('$1') for e in d.get('plugins', {}).get('$KIT_PLUGIN', []) if e.get('scope') == 'user'), None)"
+		"next((e.get(a[0]) for e in d.get('plugins', {}).get(a[1], []) if e.get('scope') == a[2] and (a[2] != 'project' or (a[3] and e.get('projectPath') and os.path.realpath(e['projectPath']) == os.path.realpath(a[3])))), None)" \
+		"$1" "$KIT_PLUGIN" "${2:-user}" "${3:-}"
 }
 
-# Point KIT_LINK at the installed plugin, else at the kit that is running this
-# script (a clone used without the plugin).
+# Point KIT_LINK at the installed plugin of KIT_SCOPE, else at the kit that is
+# running this script (a clone used without the plugin).
 repoint_link() { # repoint_link <running-kit-root>
 	local target
-	target="$(installed_field installPath)"
+	target="$(installed_field installPath "$KIT_SCOPE" "$KIT_PROJECT")"
 	[[ -n "$target" && -d "$target" ]] || target="$1"
 	mkdir -p "$KIT_STATE"
 	ln -sfn "$target" "$KIT_LINK"

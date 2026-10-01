@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""bk-mainloop-share — classify main-loop API turns in Claude Code transcripts by what
+each turn did: the share of the main loop spent orchestrating rather than building.
+
+Usage: bk-mainloop-share <transcript-dir> <days>
+       bk-mainloop-share --help
+
+  <transcript-dir>  a directory of session transcripts (*.jsonl), as Claude Code
+                    writes under ~/.claude/projects/<project-dir>/; subdirectories
+                    (subagent transcripts) are not read
+  <days>            the window: a file whose mtime is older than <days> days is skipped
+
+A turn is one assistant message id; entries marked isSidechain are not main-loop turns
+and are not counted. A turn with several tool calls takes the FIRST category in this
+order that any of its calls matches:
+
+  dispatch                 Agent, Task, SendMessage, Workflow, TaskStop, ScheduleWakeup,
+                           Monitor
+  bookkeeping-write        Edit/Write of a ledger, RESUME, brief, report or memory file
+  git/gh/land legwork      Bash running a git write verb, gh, dev-setup/ci/land or a
+                           pb land/issue/rotation script
+  gate run                 Bash running make, go test|build|vet, bk-gate, gate.py,
+                           verify.py, unit_run or golangci
+  steering edit            Edit/Write under .claude/ or of CLAUDE.md
+  plan/spec/ADR/doc write  Edit/Write under plans/, specs/, decisions/ or docs/
+  product edit             any other Edit/Write
+  read/search              Read, Grep, Glob, ToolSearch, an MCP tool, any other Bash;
+                           a Bash command that is `git grep` (or `git -C <dir> grep`,
+                           after an optional `cd <dir> &&`) is a read whatever its
+                           pattern says
+  other tool               any other tool
+  text only                no tool call
+
+Output: a header line, then one row per category with turns, % of turns, % of output
+tokens and % of context re-read (input + cache_read + cache_creation tokens of the
+request, which is what a main-loop turn costs). Categories with no turns are omitted.
+Last, one row `orchestration subtotal`: dispatch + bookkeeping-write + git/gh/land
+legwork + gate run, in the same four columns.
+
+Exit: 0 · 2 usage (wrong arity, not a directory, <days> not a positive number).
+"""
+
+from __future__ import annotations
+
+import collections
+import json
+import re
+import sys
+import time
+from pathlib import Path
+
+BOOK = re.compile(r"(progress\.md|RESUME\.md|/sdd/|\.claude/context/|\.claude/state/|/briefs/|\.claude/reports/|-report\.md|MEMORY\.md|/memory/)")
+PLAN = re.compile(r"(/plans/|/specs/|/decisions/|docs/)")
+STEER = re.compile(r"(\.claude/|CLAUDE\.md)")
+GIT_GREP = re.compile(r"\s*(?:cd\s+\S+\s*&&\s*)?git\s+(?:-C\s+\S+\s+)?grep\b")
+GITLEG = re.compile(r"\bgit\s+(-C\s+\S+\s+)?(add|commit|push|merge|rebase|checkout|switch|branch|tag|worktree|fetch|pull|stash|reset|cherry-pick|restore|rm|mv)\b|\bgh\s|dev-setup/ci/land\b|land\.py|ci_watch|commit\.py|slice_close|milestone_|defer\.py|issues\.py|rotate|resume_check|brief\.py|snapshot\.py")
+GATE = re.compile(r"\b(make|go (test|build|vet)|bk-gate|gate\.py|verify\.py|unit_run|golangci)\b")
+ORDER = ["dispatch", "bookkeeping-write", "git/gh/land legwork", "gate run", "steering edit", "plan/spec/ADR/doc write",
+         "product edit", "read/search", "other tool", "text only"]
+ORCHESTRATION = ORDER[:4]
+
+
+def classify(blocks: list[dict]) -> str:
+    cats = set()
+    for b in blocks:
+        if b.get("type") != "tool_use":
+            continue
+        name, inp = b.get("name", ""), b.get("input") or {}
+        if name in ("Agent", "Task", "SendMessage", "Workflow", "TaskStop", "ScheduleWakeup", "Monitor"):
+            cats.add("dispatch")
+        elif name in ("Edit", "Write", "NotebookEdit"):
+            p = str(inp.get("file_path", ""))
+            if BOOK.search(p):
+                cats.add("bookkeeping-write")
+            elif PLAN.search(p) and not p.endswith(".go"):
+                cats.add("plan/spec/ADR/doc write")
+            elif STEER.search(p):
+                cats.add("steering edit")
+            else:
+                cats.add("product edit")
+        elif name == "Bash":
+            c = str(inp.get("command", ""))
+            if GIT_GREP.match(c):
+                cats.add("read/search")
+            elif GITLEG.search(c):
+                cats.add("git/gh/land legwork")
+            elif GATE.search(c):
+                cats.add("gate run")
+            else:
+                cats.add("read/search")
+        elif name in ("Read", "Grep", "Glob", "ToolSearch") or name.startswith("mcp__"):
+            cats.add("read/search")
+        else:
+            cats.add("other tool")
+    for c in ORDER:
+        if c in cats:
+            return c
+    return "text only"
+
+
+def usage(message: str) -> int:
+    print(f"bk-mainloop-share: {message} (usage: bk-mainloop-share <transcript-dir> <days>; see --help)",
+          file=sys.stderr)
+    return 2
+
+
+def main(argv: list[str]) -> int:
+    if argv[:1] in (["-h"], ["--help"]):
+        print((__doc__ or "").strip())
+        return 0
+    if len(argv) != 2:
+        return usage(f"takes two arguments, got {len(argv)}")
+    d = Path(argv[0])
+    if not d.is_dir():
+        return usage(f"not a directory: {d}")
+    try:
+        days = float(argv[1])
+    except ValueError:
+        days = 0.0
+    if not days > 0:
+        return usage(f"<days> is not a positive number: {argv[1]!r}")
+
+    cutoff = time.time() - days * 86400
+    turns = collections.Counter()
+    out = collections.Counter()
+    ctx = collections.Counter()
+    sessions = 0
+    for f in sorted(d.glob("*.jsonl")):
+        if f.stat().st_mtime < cutoff:
+            continue
+        msgs: dict[str, dict] = {}
+        for line in f.open(encoding="utf-8", errors="replace"):
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(e, dict) or e.get("type") != "assistant" or e.get("isSidechain"):
+                continue
+            m = e.get("message") or {}
+            mid = m.get("id")
+            if not mid:
+                continue
+            slot = msgs.setdefault(mid, {"blocks": [], "usage": {}})
+            slot["blocks"].extend(b for b in (m.get("content") or []) if isinstance(b, dict))
+            slot["usage"] = m.get("usage") or slot["usage"]
+        if not msgs:
+            continue
+        sessions += 1
+        for slot in msgs.values():
+            c = classify(slot["blocks"])
+            u = slot["usage"]
+            turns[c] += 1
+            out[c] += int(u.get("output_tokens") or 0)
+            ctx[c] += sum(int(u.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+    T, O, C = sum(turns.values()) or 1, sum(out.values()) or 1, sum(ctx.values()) or 1
+    print(f"{sessions} sessions, {sum(turns.values())} main-loop turns, window {days:g}d, dir {d.name}")
+    print(f"{'category':28} {'turns':>7} {'%':>5} {'out tok %':>9} {'ctx re-read %':>13}")
+    for c in ORDER:
+        if turns[c]:
+            print(f"{c:28} {turns[c]:7d} {100*turns[c]/T:5.1f} {100*out[c]/O:9.1f} {100*ctx[c]/C:13.1f}")
+    t, o, x = (sum(n[c] for c in ORCHESTRATION) for n in (turns, out, ctx))
+    print(f"{'orchestration subtotal':28} {t:7d} {100*t/T:5.1f} {100*o/O:9.1f} {100*x/C:13.1f}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

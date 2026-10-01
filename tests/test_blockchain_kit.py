@@ -1,6 +1,6 @@
-"""Tests for bin/blockchain-kit-context, the SessionStart hook, bin/bsc-fork,
-hooks/gofmt-on-edit and hooks/guard-node-secrets. What Claude Code does with a hook's
-answer is a live probe.
+"""Tests for bin/blockchain-kit-context, the SessionStart hook, bin/bsc-fork and
+hooks/gofmt-on-edit. The guards are tests/test_guards.py. What Claude Code does with a
+hook's answer is a live probe.
 
 Run: tests/run   (or: python3 -m unittest discover -s tests)
 """
@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -21,7 +23,7 @@ KIT = Path(__file__).resolve().parent.parent
 HOOK = KIT / "bin" / "blockchain-kit-context"
 FORK = KIT / "bin" / "bsc-fork"
 GOFMT = KIT / "hooks" / "gofmt-on-edit"
-GUARD = KIT / "hooks" / "guard-node-secrets"
+WHO = ("-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false")
 
 PIN = "a539ea2ca63c"
 SHA = PIN + "0" * 28
@@ -73,25 +75,30 @@ class Kit(unittest.TestCase):
         drop = ("BLOCKCHAIN_KIT_", "BSC_FORK_", "GOPATH", "GOFLAGS", "GOWORK", "GIT_")
         full = {k: v for k, v in os.environ.items() if not k.startswith(drop)}
         full["GOMODCACHE"] = str(self.tmp / "cache")
+        # hermetic git: no repository above the temp dir, no user or system config
+        full.update(GIT_CEILING_DIRECTORIES=str(self.tmp), GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+        full["BLOCKCHAIN_KIT_IPC"] = str(self.tmp / "no-geth.ipc")  # a dev host unless a test says otherwise
         full.update(more)
         return full
 
-    def commit(self, subject: str) -> str:
-        """A commit in the fork checkout; the bot's go.mod is NOT moved to it. Returns its SHA."""
-        geth = self.tmp / "geth"
-        who = ("-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false")
-        for args in (("init", "--quiet", "--initial-branch=mrinal/dev"), ("add", "--all"),
-                     (*who, "commit", "--quiet", "--allow-empty", "--message", subject)):
-            if args[0] == "init" and (geth / ".git").exists():
-                continue
-            subprocess.run(["git", "-C", str(geth), *args], check=True, capture_output=True, env=self.env())
-        done = subprocess.run(["git", "-C", str(geth), "rev-parse", "HEAD"], check=True, capture_output=True,
+    def git(self, tree: str, *args: str) -> str:
+        done = subprocess.run(["git", "-C", str(self.tmp / tree), *WHO, *args], check=True, capture_output=True,
                               text=True, env=self.env())
         return done.stdout.strip()
 
-    def given(self, cwd: str, stdin: str | None = None, **env: str) -> str | None:
+    def commit(self, subject: str, tree: str = "geth") -> str:
+        """A commit in a temp checkout (the fork's by default; the bot's go.mod is NOT moved to
+        it). Returns its SHA."""
+        for args in (("init", "--quiet", "--initial-branch=mrinal/dev"), ("add", "--all"),
+                     ("commit", "--quiet", "--allow-empty", "--message", subject)):
+            if args[0] == "init" and (self.tmp / tree / ".git/HEAD").exists():
+                continue
+            self.git(tree, *args)
+        return self.git(tree, "rev-parse", "HEAD")
+
+    def given(self, cwd: str, stdin: str | None = None, hook: Path = HOOK, **env: str) -> str | None:
         call = json.dumps({"hook_event_name": "SessionStart", "source": "startup", "cwd": str(self.tmp / cwd)})
-        done = subprocess.run([str(HOOK)], input=call if stdin is None else stdin, capture_output=True,
+        done = subprocess.run([str(hook)], input=call if stdin is None else stdin, capture_output=True,
                               text=True, env=self.env(**env), cwd=self.tmp, timeout=30, check=False)
         self.assertEqual((done.returncode, done.stderr), (0, ""))
         return json.loads(done.stdout)["hookSpecificOutput"]["additionalContext"] if done.stdout else None
@@ -122,6 +129,96 @@ class Kit(unittest.TestCase):
         self.assertIsNone(self.given("geth"))  # the fork is developed from its client
         self.assertIsNone(self.given("bot", BLOCKCHAIN_KIT_CONTEXT="0"))
         self.assertIsNone(self.given("bot", stdin="not json"))
+
+    # the kit, host, git-guard and stray-steering lines
+
+    def socket_at(self, name: str) -> Path:
+        """A unix socket left in the temp dir, as geth leaves its IPC endpoint. Bound by a
+        relative name: a temp dir's absolute path can exceed AF_UNIX's 108 bytes."""
+        back = os.getcwd()
+        os.chdir(self.tmp)
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+                sock.bind(name)
+        finally:
+            os.chdir(back)
+        return self.tmp / name
+
+    def test_the_host_line_says_prod_where_the_geth_ipc_is_a_socket(self):
+        ipc = self.socket_at("geth.ipc")
+        text = self.given("bot", BLOCKCHAIN_KIT_IPC=str(ipc))
+        assert text is not None
+        self.assertIn(f"\nHost: PRODUCTION — geth IPC live at {ipc}; the recorder archive is on this host. "
+                      "Tests run offline against fixtures.", text)
+        plain = self.tmp / "plain.ipc"
+        plain.write_text("")
+        for path in (plain, self.tmp / "absent.ipc"):
+            text = self.given("bot", BLOCKCHAIN_KIT_IPC=str(path))
+            assert text is not None
+            self.assertIn(f"\nHost: dev — no geth IPC at {path}.", text)
+            self.assertNotIn("PRODUCTION", text)
+
+    def test_the_kit_line_names_the_checkout_or_the_installed_sha(self):
+        sha = subprocess.run(["git", "-C", str(KIT), "rev-parse", "--short=12", "HEAD"], capture_output=True,
+                             text=True, check=False, env=self.env()).stdout.strip()
+        text = self.given("bot")
+        assert text is not None
+        if sha:  # the suite runs from a git checkout of the kit
+            self.assertIn(f"\nblockchain-kit: running from the checkout {KIT} at {sha}.", text)
+        installed = self.tmp / "plugins" / "0123456789ab"  # a plugin install is named by its SHA
+        for part in ("bin", "lib", "skills/using-blockchain-kit"):
+            shutil.copytree(KIT / part, installed / part, ignore=shutil.ignore_patterns("__pycache__"))
+        text = self.given("bot", hook=installed / "bin" / "blockchain-kit-context")
+        assert text is not None
+        self.assertIn("\nblockchain-kit: installed at 0123456789ab.", text)
+        self.assertNotIn("running from the checkout", text)
+
+    def test_the_git_guard_line_appears_only_while_the_guard_is_off(self):
+        self.assertNotIn("Git guard:", self.given("bot") or "")  # not a git work tree: no line
+        shutil.rmtree(self.tmp / "bot/.git")
+        self.commit("feat: the bot", tree="bot")
+        text = self.given("bot/internal/replay")
+        assert text is not None
+        self.assertIn("\nGit guard: core.hooksPath is unset — the main-ref guard is NOT armed in this checkout; "
+                      "run make tools.", text)
+
+        self.git("bot", "config", "core.hooksPath", "githooks")  # relative: against the module root
+        self.assertIn("\nGit guard: githooks has no reference-transaction hook — the main-ref guard is NOT "
+                      "armed; run make tools.", self.given("bot") or "")
+        hook = self.tmp / "bot/githooks/reference-transaction"
+        hook.parent.mkdir()
+        hook.write_text("#!/bin/sh\nexit 0\n")
+        hook.chmod(0o644)
+        self.assertIn(f"\nGit guard: {hook} is not executable — git ignores it silently.", self.given("bot") or "")
+        hook.chmod(0o755)
+        text = self.given("bot")
+        assert text is not None
+        self.assertNotIn("Git guard:", text)
+        self.assertIn("Fork checkout: none named.", text)  # the other lines still there
+
+    def test_the_stray_steering_line_counts_tracked_files_besides_settings(self):
+        shutil.rmtree(self.tmp / "bot/.git")
+        steering = self.tmp / "bot/.claude"
+        steering.mkdir()
+        (steering / "settings.json").write_text("{}\n")
+        self.commit("chore: settings only", tree="bot")
+        self.assertNotIn("Stray steering:", self.given("bot") or "")
+
+        for rel in ("agents/x.md", "hooks/a.py", "rules/b.md", "skills/c/SKILL.md"):
+            (steering / rel).parent.mkdir(parents=True, exist_ok=True)
+            (steering / rel).write_text("x\n")
+        self.git("bot", "add", ".claude/agents/x.md")
+        self.git("bot", "commit", "--quiet", "--message", "one stray")
+        self.assertIn("\nStray steering: 1 tracked file(s) under .claude/ besides settings.json "
+                      "(.claude/agents/x.md). blockchain-kit is the one steering home.", self.given("bot") or "")
+        self.git("bot", "add", ".claude")
+        text = self.given("bot")
+        assert text is not None
+        self.assertIn("\nStray steering: 4 tracked file(s) under .claude/ besides settings.json "
+                      "(.claude/agents/x.md, .claude/hooks/a.py, .claude/rules/b.md, …). "
+                      "blockchain-kit is the one steering home.", text)
+        self.assertEqual(text.count("Stray steering:"), 1)
+        self.assertLess(len(text), 10_000)
 
     # the checkout against the pin
 
@@ -227,30 +324,6 @@ class Kit(unittest.TestCase):
         # a directory that is named and is not the fork is not formatted
         done = self.edit(other, BLOCKCHAIN_KIT_GOFMT_BIN=str(recorder), BSC_FORK_PATH=str(self.tmp / "notes"))
         self.assertEqual(Path(f"{recorder}.calls").read_text(), f"-l -w {fork}\n")
-
-    # guard-node-secrets
-
-    def read(self, path: str, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
-        call = json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": path}})
-        return subprocess.run([str(GUARD)], input=call if stdin is None else stdin, capture_output=True, text=True,
-                              timeout=30, check=False, env=self.env())
-
-    def test_node_identity_and_account_material_is_denied(self):
-        for path in ("/data/geth/nodekey", "/data/geth/JWTSecret", "/data/engine.jwt",
-                     "/data/keystore/UTC--2026-01-01T00-00-00.000000000Z--00aa"):
-            done = self.read(path)
-            self.assertEqual(done.returncode, 0, done.stderr)
-            out = json.loads(done.stdout)["hookSpecificOutput"]
-            self.assertEqual((out["hookEventName"], out["permissionDecision"]), ("PreToolUse", "deny"), path)
-        for path in ("/fork/accounts/keystore/keystore.go", "/fork/p2p/testdata/nodekey",
-                     "/fork/cmd/utils/nodekey_ext.go", "/bot/internal/state/a.go"):
-            done = self.read(path)
-            self.assertEqual((done.returncode, done.stdout), (0, ""), path)
-
-    def test_the_guard_fails_closed(self):
-        done = self.read("", stdin="not json")
-        self.assertEqual((done.returncode, done.stdout), (2, ""))
-        self.assertIn("failing closed", done.stderr)
 
     def test_a_formatter_that_fails_is_said_once(self):
         done = self.edit(self.tmp / "bot/a.go", BLOCKCHAIN_KIT_GOFMT_BIN=str(self.tmp / "absent"))
