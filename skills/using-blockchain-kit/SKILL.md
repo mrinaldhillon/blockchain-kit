@@ -23,18 +23,20 @@ over anything here.
 | Before editing any Go file in the fork checkout | `blockchain-kit:fork-ext-convention` |
 | Anything under the fork's `deploy/production/`, its `config.toml` or `ExecStart` | `blockchain-kit:fork-deploy` |
 | Moving the fork to a new upstream tag | `blockchain-kit:upstream-rebase` |
-| A Go slice whose contract is written, in the bot or in the fork | the `blockchain-kit:golang-implementer` agent; `blockchain-kit:golang-implementer-lite` when the diff's shape is written too |
+| A multi-step change, cutting units, landing; what a change owes by class | `blockchain-kit:working-here` |
+| A Go slice whose contract is written, in the bot or in the fork | the `blockchain-kit:golang-implementer` agent |
+| A product-Go diff about to land that no workflow run reviewed | the `blockchain-kit:code-reviewer` agent, once |
 | Before claiming a gate that depends on parity | the `blockchain-kit:parity-auditor` agent, in a snapshot the brief names |
 | The fork pin moved, or a needed symbol is not in the index | the `blockchain-kit:fork-indexer` agent |
 | The one-time live capture of test fixtures | the `blockchain-kit:fixture-capturer` agent |
 | Right-sizing or tuning the running node | the `blockchain-kit:infra-profiler` agent |
-| Several independent units of one change, each with its own brief | the `blockchain-kit:implement` workflow, only when the user asks for it by name |
+| Several independent units of one change, each with its own brief and packages | `/blockchain-kit:implement`: the user's command, which runs the `blockchain-kit:implement` workflow |
 
 - **The node is a private fork, developed from this repo.** The import path reads
   `github.com/ethereum/go-ethereum` and resolves to bsc-geth at the commit `go.mod` pins.
   Upstream documentation and memory do not answer a question about it: an API without a
-  fork `file:line` does not exist here. The fork carries no steering of its own; its
-  conventions are the four fork skills above.
+  fork `file:line` does not exist here. A session rooted here loads none of the fork's own
+  steering; its conventions are the four fork skills above.
 - **The pin is not the checkout.** The build compiles the pin unless `go.work` is active.
   The two lines below this table say which commit is pinned, where the checkout is, where
   it stands against the pin, and which one this build compiles. An edit in the checkout

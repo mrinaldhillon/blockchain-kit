@@ -115,9 +115,9 @@ pb's other eleven agents are not carried (§6).
 
 | Hook | Event | Contract |
 |---|---|---|
-| `blockchain-kit-context` | SessionStart | Routing table; pin and checkout lines; the kit's own installed SHA (a clone left behind runs an old kit silently — §5.5); one environment line (prod host or dev, from pb's `env_banner`); one line when `core.hooksPath` is unset; one line per tracked file under the project's `.claude/` other than `settings.json`. Prints nothing outside a fork client. Never fails a session. |
+| `blockchain-kit-context` | SessionStart | Routing table; pin and checkout lines; the kit's own installed SHA (a clone left behind runs an old kit silently — §5.5); one environment line (prod host or dev, from pb's `env_banner`); one line when `core.hooksPath` is unset or its `reference-transaction` hook is missing or not executable; one line, with a count and the first three paths, when the project tracks anything under `.claude/` other than `settings.json` (one line per file would be 407 lines in pb before the cut, and the hook's context spills to a file above 10,000 characters). Prints nothing outside a fork client. Never fails a session. |
 | `guard-secrets` | PreToolUse, file tools | The node material it guards today, plus pb `guard_secrets.py`'s generic patterns (dotenv family, `*.pem`, `*.key`, `*.p12`, `secrets/`). One hook. Fails closed. |
-| `guard-prod-run` | PreToolUse, Bash | pb `run_guard.py`: on the prod host, deny a bare replay, bot or collector run that bypasses `scripts/replay-run.sh`. Fails closed. Protects the recorder log. |
+| `guard-prod-run` | PreToolUse, Bash | The binary class of pb `run_guard.py`: on the prod host, deny a bare replay, bot or collector run that bypasses `scripts/replay-run.sh`. Fails closed. Protects the recorder log. The command is classified with `shlex` at command position, not with pb's 787-line `cmdclass`; the residuals are in the hook's header. `run_guard.py`'s second class (heavy local work through `unit_run.py`) is not carried: it is a rule about pb's own runner, and if it is wanted it belongs in the `make` targets it names. |
 | `gofmt-on-edit` | PostToolUse | Unchanged. |
 
 Each hook has a kill switch in the `BLOCKCHAIN_KIT_*` family and reads project state through
@@ -128,7 +128,7 @@ Each hook has a kill switch in the `BLOCKCHAIN_KIT_*` family and reads project s
 | Command | Contract |
 |---|---|
 | `bsc-fork` | Unchanged. |
-| `bk-gate <name> -- <command>` | Run one command; print exactly one line `gate: <name> rc=<n> t=<s>s out=<path>` and, on red, at most ten failing lines. Exit with the command's code. From pb `gate.py`. |
+| `bk-gate [-C DIR] <name> -- <command>` | Run one command, in the caller's directory or in `DIR`; print exactly one line `gate: <name> rc=<n> t=<s>s out=<path>` and, on red, the last ten lines of its output. Exit with the command's code. From pb `gate.py`. |
 | `bk-mainloop-share <transcript-dir> <days>` | The classifier behind §2's table. The kit's one metric (§10). |
 | `blockchain-kit-setup`, `-update` | Accept `--scope user|project`; `installed_field` matches a project-scope install by `projectPath`. |
 
@@ -206,8 +206,8 @@ worktrees; one review when the lanes merge; no per-lane reviewer and no refuters
 | `branch` | The run branch all lanes merge into. It exists and is checked out in the session's tree. |
 | `head` | The commit of `branch` every lane starts from. |
 | `gate` | The check command for the merged tree, for example `make test-offline PKG=…`. |
-| `fork` | Optional absolute path of the bsc-geth checkout: the units are fork work. |
-| `tiers` | Optional per-stage model override. A tier above opus is refused. |
+| `fork` | Optional absolute path of the bsc-geth checkout: the units are fork work. `branch` is then the branch checked out there, and `gate` defaults to `make audit-ext`. |
+| `tiers` | Optional per-stage model override (`lane`, `integrate`, `gate`, `review`, `fix`). A tier above opus, by name, is refused. `review: "session"` runs the review seat at the session's tier, and is the only stage that accepts it. |
 
 **Stages:**
 
@@ -217,13 +217,16 @@ worktrees; one review when the lanes merge; no per-lane reviewer and no refuters
    `worktree.baseRef: "head"`). The lane reports its start SHA, implements the brief, runs
    package-scoped gates there through `bk-gate`, and commits on that branch. It returns
    `{branch, start, sha, paths, gates:[{name, rc, line}], summary, handback?}`. The script
-   drops a lane whose `start` is not `head`. A lane that hits a question the brief does not
-   answer stops at green and returns `handback`.
+   drops a lane whose `start` is not `head` and reports it under `stalled`. A lane that hits
+   a question the brief does not answer stops at green and returns `handback`; a lane that
+   returns a red gate is treated as a hand-back. Neither is merged.
 2. **Integrate**, one agent, sonnet. Merges each lane branch into `branch` in unit order
    (the lane branches are visible from the session's tree — measured). A lane that conflicts
    is not resolved: it is left out and reported. It then removes the worktree and deletes the
    branch of every merged lane; a changed worktree is never removed by the harness
-   (measured). Returns `{merged[], conflicted[], head}`.
+   (measured). Returns `{merged[], conflicted[], head, unclaimed[]}`; `unclaimed` is every
+   worktree under `.claude/worktrees/` that no returned lane names, which is what a lane that
+   died left behind.
 3. **Gate**, one agent, haiku. Runs `bk-gate run -- <gate>` on the merged tree and returns
    the verdict line verbatim with `rc`. The script decides green from `rc == 0`, never from
    the agent's reading.
@@ -243,9 +246,14 @@ hot path or the money path: the main loop reads those diffs itself before landin
 - A unit whose `packages` intersect the hot-path set gets `hot-path-determinism` in its
   load line. `go` is always loaded.
 - Two units with a package in common are rejected before any lane starts.
-- With `fork`, lanes run one at a time in the fork checkout on a branch cut from
-  `mrinal/dev`: harness worktrees belong to the session's repository, not the fork. Stage 4's
-  API rule becomes the `Ext` convention and the gate is `make audit-ext`.
+- With `fork`, lanes run one at a time in the fork checkout, each committing on `branch`,
+  which the caller cut from `mrinal/dev`: harness worktrees belong to the session's
+  repository, not the fork. Each lane starts where the last one ended, there is no Integrate
+  stage, and the run stops at the first lane that dies or hands back, because what it left is
+  the next lane's tree. Stage 4's API rule becomes the `Ext` convention and the gate is
+  `make audit-ext`.
+- The script's own decisions are tested without a session: `tests/test_implement.py` answers
+  its agents from a scenario. What an agent does with a prompt is the live run.
 - A stage that dies is reported with what it left behind (`stalled`), never as a clean result.
 
 ## 8. The working model
