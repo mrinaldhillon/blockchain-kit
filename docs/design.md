@@ -63,8 +63,9 @@ Consequences:
 | File | Content |
 |---|---|
 | `CLAUDE.md` | Project facts only: what the project is, the commands table, architecture at a glance, the non-negotiable invariants, the environment rule, the standard of evidence, the operator authorizations (merge without asking, privileged prod commands, where to ask), the map of docs. Target at most 150 lines. No routing, tiers, hooks, rotation or pipeline text. One line names blockchain-kit as the steering home. |
-| `.claude/settings.json` | `extraKnownMarketplaces` (the kit's git repo), `enabledPlugins` (the kit on; nothing else listed), `env` (`GOPRIVATE` and `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`), `enabledMcpjsonServers`, and a `permissions.allow` list trimmed to what remains. No `hooks`, `statusLine`, `outputStyle` or `skillOverrides`. |
-| `.mcp.json` | Unchanged. The `gopls` and `pyright` servers start the repo's pinned binaries under `dev-setup/`, and the key `gopls` keeps the tool names `mcp__gopls__*` that the kit's agents are granted. |
+| `.claude/settings.json` | `extraKnownMarketplaces` (the kit's git repo), `enabledPlugins` (the kit on; nothing else listed), `worktree.baseRef: "head"` (§7 depends on it: the default `fresh` starts a lane at `origin/main` — measured), `env` (`GOPRIVATE` and `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`), `enabledMcpjsonServers`, and a `permissions.allow` list trimmed to what remains. No `hooks`, `statusLine`, `outputStyle` or `skillOverrides`. Keys in the order the plugin CLI writes them, so a per-clone install leaves no diff (measured: `plugin install --scope project` rewrites the file). |
+| `.mcp.json` | The pyright server loses its `-p .claude/pyrightconfig.json` argument: with the overlay gone the server exits on it (measured). Otherwise unchanged. The `gopls` and `pyright` servers start the repo's pinned binaries under `dev-setup/`, and the key `gopls` keeps the tool names `mcp__gopls__*` that the kit's agents are granted. |
+| `.gitignore` | Gains `.claude/worktrees/`: lane worktrees live there and the rule that ignores them today is `.claude/.gitignore`, which the cut deletes (measured). |
 | `docs/decisions/` | One new engineering ADR: this repo carries no steering layer; its home is blockchain-kit. |
 | `dev-setup/` | Gains the land script (§4.3). |
 
@@ -104,10 +105,9 @@ and branch protection on `main` requires `ci` and `steering`, strict, admins inc
 
 | Agent | Tier | Change from `6796a58` |
 |---|---|---|
-| `golang-implementer` | opus | Drops `LSP` from `tools:`. Learns the lane contract (§7). Absorbs `golang-implementer-lite`, which is deleted: implementation runs at opus (decided). |
+| `golang-implementer` | opus | Drops `LSP` from `tools:` (it is never in the live roster — measured). Its "never `git commit`; a brief cannot lift that" rule is replaced by the lane contract (§7): at `6796a58` both probe lanes refused to commit against the brief (measured). Absorbs `golang-implementer-lite`, which is deleted: implementation runs at opus (decided). |
 | `code-reviewer` (new) | opus | One seat over the merged diff of a run. Carries pb's reserved angles: determinism and parity, the record spine, import boundaries, hot-path blocking. Read and Bash only. |
-| `determinism-auditor`, `parity-auditor` | opus | Gain `ToolSearch` so deferred gopls tools can load. |
-| `fork-indexer`, `fixture-capturer`, `infra-profiler` | opus | Unchanged. |
+| `determinism-auditor`, `parity-auditor`, `fork-indexer`, `fixture-capturer`, `infra-profiler` | opus | Unchanged. An agent without `ToolSearch` gets its granted `mcp__gopls__*` tools undeferred and callable (measured on `parity-auditor`), so the auditors need no new grant. |
 
 pb's other eleven agents are not carried (§6).
 
@@ -115,7 +115,7 @@ pb's other eleven agents are not carried (§6).
 
 | Hook | Event | Contract |
 |---|---|---|
-| `blockchain-kit-context` | SessionStart | Routing table; pin and checkout lines; one environment line (prod host or dev, from pb's `env_banner`); one line when `core.hooksPath` is unset; one line per tracked file under the project's `.claude/` other than `settings.json`. Prints nothing outside a fork client. Never fails a session. |
+| `blockchain-kit-context` | SessionStart | Routing table; pin and checkout lines; the kit's own installed SHA (a clone left behind runs an old kit silently — §5.5); one environment line (prod host or dev, from pb's `env_banner`); one line when `core.hooksPath` is unset; one line per tracked file under the project's `.claude/` other than `settings.json`. Prints nothing outside a fork client. Never fails a session. |
 | `guard-secrets` | PreToolUse, file tools | The node material it guards today, plus pb `guard_secrets.py`'s generic patterns (dotenv family, `*.pem`, `*.key`, `*.p12`, `secrets/`). One hook. Fails closed. |
 | `guard-prod-run` | PreToolUse, Bash | pb `run_guard.py`: on the prod host, deny a bare replay, bot or collector run that bypasses `scripts/replay-run.sh`. Fails closed. Protects the recorder log. |
 | `gofmt-on-edit` | PostToolUse | Unchanged. |
@@ -139,8 +139,12 @@ Each hook has a kill switch in the `BLOCKCHAIN_KIT_*` family and reads project s
 - `commands/init.md`: gains the check that the project's `.claude/` holds only `settings.json`.
 - `output-styles/distinguished-engineer.md` with `force-for-plugin: true` (docs), so the
   project sets no `outputStyle`.
-- `plugin.json` drops `version`, so the commit SHA is the version and every kit commit
-  propagates (docs). The marketplace entry keeps the relative source `./`.
+- `plugin.json` drops `version`, so the commit SHA is the version (measured: the install's
+  version is the 12-character SHA). A kit commit does not reach an installed copy on its own:
+  neither a new session nor `"autoUpdate": true` on the marketplace entry moved it within the
+  windows measured. `blockchain-kit-update` runs `claude plugin marketplace update` then
+  `claude plugin update blockchain-kit@blockchain-kit --scope project`, and the next session
+  has the commit (measured). The marketplace entry keeps the relative source `./`.
 - Kit CI: `tests/run`, `claude plugin validate .`, shellcheck and ruff, on pull requests.
 
 ## 6. Disposition of pb's current layer
@@ -157,8 +161,9 @@ something observed.
 `gate_reds`, `rotate_nudge`, `rotate_trigger`, `rotate_actuate`, `precompact_hold`,
 `checkpoint`, `resume_inject`, `startup_resume`, `state_sweep`, `subagent_trail`,
 `commit_trailers`, `issues_inject`, `validate_config`, `py_diagnostics`, `main_guard`.
-`composite_gate_guard`: if the denial of a bare local `make ci` exists only in this hook, it
-moves into the Makefile target (REPO); otherwise RETIRE.
+`composite_gate_guard`: the denial of a bare local `make ci` exists only in this hook
+(measured: `PB_COMPOSITE_OK` appears nowhere in the `Makefile` or `dev-setup/ci`), so it moves
+into the Makefile target (REPO).
 
 **Tools (41 scripts and `conductor/`).** ADOPT: `gate.py` as `bk-gate`. REPO: the land step,
 rewritten small (§4.3). REPO if the operator wants them as engineering checks, else RETIRE:
@@ -207,13 +212,18 @@ worktrees; one review when the lanes merge; no per-lane reviewer and no refuters
 **Stages:**
 
 1. **Lane**, one per unit, concurrent, each in its own worktree, `golang-implementer` at
-   opus. The lane puts its worktree at `head`, implements the brief, runs package-scoped
-   gates there through `bk-gate`, and commits on its lane branch. It returns
-   `{branch, sha, paths, gates:[{name, rc, line}], summary, handback?}`. A lane that hits a
-   question the brief does not answer stops at green and returns `handback`.
-2. **Integrate**, one agent, sonnet. Merges each lane branch into `branch` in unit order. A
-   lane that conflicts is not resolved: it is left out and reported. Returns
-   `{merged[], conflicted[], head}`.
+   opus. The harness creates the worktree at `<project>/.claude/worktrees/wf_<run>-<n>` on a
+   branch it names `worktree-wf_<run>-<n>`, cut from the session's HEAD (measured, under
+   `worktree.baseRef: "head"`). The lane reports its start SHA, implements the brief, runs
+   package-scoped gates there through `bk-gate`, and commits on that branch. It returns
+   `{branch, start, sha, paths, gates:[{name, rc, line}], summary, handback?}`. The script
+   drops a lane whose `start` is not `head`. A lane that hits a question the brief does not
+   answer stops at green and returns `handback`.
+2. **Integrate**, one agent, sonnet. Merges each lane branch into `branch` in unit order
+   (the lane branches are visible from the session's tree — measured). A lane that conflicts
+   is not resolved: it is left out and reported. It then removes the worktree and deletes the
+   branch of every merged lane; a changed worktree is never removed by the harness
+   (measured). Returns `{merged[], conflicted[], head}`.
 3. **Gate**, one agent, haiku. Runs `bk-gate run -- <gate>` on the merged tree and returns
    the verdict line verbatim with `rc`. The script decides green from `rc == 0`, never from
    the agent's reading.
@@ -278,23 +288,43 @@ Rules that follow:
   that held them in agreement.
 - **The selector is the only judge of what CI runs.** A lane runs when the diff touches a
   file the lane reads. A prose diff selecting any lane is a selector defect to fix in pb.
+  The prose row above is the target, not today's behaviour (measured at `01f5af59`): only the
+  ceremony-free roots (`docs/decisions/`, `docs/reports/`, `docs/reviews/`, `docs/design/`,
+  `dev-setup/decisions/`) select nothing; any other `docs/*.md` selects `python-floor-check
+  boundary-lint citation-lint layering-lint shelltest` and four selector harnesses, and
+  `CLAUDE.md` or `README.md` the first four lanes. The migration plan's C6 closes the gap.
 - **Nothing is gated twice.** There is no local composite before the GitHub run and no
   per-slice gate before the merge gate.
 
 ## 9. Harness facts this design leans on
 
-All **docs**, to be confirmed by the probes in the migration plan before anything depends on
-them.
+**Measured** on Claude Code 2.1.286 by the phase-0 probes (observed strings: the migration
+plan, §Phase 0 results) unless marked **docs**.
 
 - A plugin ships skills, agents, commands, hooks, MCP servers, output styles, workflows and
   `bin/`. It ships no rules. Its `settings.json` honours only `agent` and
-  `subagentStatusLine`, so `env` and `permissions` stay in the project's settings.
-- With `extraKnownMarketplaces` and `enabledPlugins` committed, a plugin whose marketplace
-  source is a relative path loads after folder trust with no install step. Headless runs need
-  the trust already accepted.
-- A private marketplace is fetched with the user's git credentials.
-- Plugin agents are named `blockchain-kit:<name>`. Plugin hooks run inside subagents. Whether
-  they run for workflow agents is undocumented.
+  `subagentStatusLine`, so `env` and `permissions` stay in the project's settings. (docs)
+- With `extraKnownMarketplaces` and `enabledPlugins` committed, an **interactive** session
+  registers the marketplace and caches the plugin after folder trust, with no prompt and no
+  install record; it does so in the background, so the kit is live from the second start. A
+  **headless** run loads nothing until `claude plugin install blockchain-kit@blockchain-kit
+  --scope project` has run once in that clone.
+- `claude plugin uninstall --scope project` and `claude plugin marketplace remove` empty
+  `enabledPlugins` and `extraKnownMarketplaces` in the clone's tracked `settings.json`.
+- A private marketplace is fetched with the user's git credentials. (docs — the probes used
+  a local `file://` git source)
+- Plugin agents are named `blockchain-kit:<name>`: that string is the Agent tool's
+  `subagent_type` and the hook payload's `agent_type`. A plugin workflow is addressed as
+  `blockchain-kit:<name>`; the bare name is not found.
+- Plugin hooks run for subagents, for workflow agents and for agents in a worktree; the
+  payload `cwd` is the worktree. The default workflow agent's `agent_type` is
+  `workflow-subagent`. A plugin hook receives `CLAUDE_PROJECT_DIR`, `CLAUDE_PLUGIN_ROOT` and
+  `CLAUDE_PLUGIN_DATA`.
+- `agentType`, `model` and the agent's `skills:` preload are honoured inside a workflow.
+- `worktree.baseRef` decides where an isolated agent starts: `fresh` (the default) is
+  `origin/<default-branch>`, `head` is the session's HEAD.
+- `force-for-plugin: true` applies the kit's output style, headless and interactive, over a
+  user-level `outputStyle`.
 - Without `version` in `plugin.json`, the commit SHA is the version.
 
 ## 10. The metric
@@ -328,4 +358,4 @@ fall says the workflow is not carrying the load, whatever else improved.
 | `golang-implementer-lite` | deleted |
 | The steering ADR corpus | left at the pb tag, not copied here |
 | `lockstep_check.py`, `adr.py`, `sweep.py` | retired, not moved to `dev-setup/` |
-| Install scope | project, through pb's committed `settings.json` |
+| Install scope | project, through pb's committed `settings.json`, plus one `claude plugin install … --scope project` per clone so headless runs load it |

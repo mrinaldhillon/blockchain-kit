@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""Classify main-loop API turns in Claude Code transcripts by what the turn did.
+
+One row per category: turns, output tokens, and context re-read (cache_read +
+input + cache_creation tokens of the request), which is what a main-loop turn costs.
+A turn with several tool calls takes the first matching category in ORDER.
+"""
+
+from __future__ import annotations
+
+import collections
+import json
+import re
+import sys
+import time
+from pathlib import Path
+
+BOOK = re.compile(r"(progress\.md|RESUME\.md|/sdd/|\.claude/context/|\.claude/state/|/briefs/|\.claude/reports/|-report\.md|MEMORY\.md|/memory/)")
+PLAN = re.compile(r"(/plans/|/specs/|/decisions/|docs/)")
+STEER = re.compile(r"(\.claude/|CLAUDE\.md)")
+GITLEG = re.compile(r"\bgit\s+(-C\s+\S+\s+)?(add|commit|push|merge|rebase|checkout|switch|branch|tag|worktree|fetch|pull|stash|reset|cherry-pick|restore|rm|mv)\b|\bgh\s|land\.py|ci_watch|commit\.py|slice_close|milestone_|defer\.py|issues\.py|rotate|resume_check|brief\.py|snapshot\.py")
+GATE = re.compile(r"\b(make|go (test|build|vet)|gate\.py|verify\.py|unit_run|golangci)\b")
+ORDER = ["dispatch", "bookkeeping-write", "git/gh/land legwork", "gate run", "steering edit", "plan/spec/ADR/doc write",
+         "product edit", "read/search", "other tool", "text only"]
+
+
+def classify(blocks: list[dict]) -> str:
+    cats = set()
+    for b in blocks:
+        if b.get("type") != "tool_use":
+            continue
+        name, inp = b.get("name", ""), b.get("input") or {}
+        if name in ("Agent", "Task", "SendMessage", "Workflow", "TaskStop", "ScheduleWakeup", "Monitor"):
+            cats.add("dispatch")
+        elif name in ("Edit", "Write", "NotebookEdit"):
+            p = str(inp.get("file_path", ""))
+            if BOOK.search(p):
+                cats.add("bookkeeping-write")
+            elif PLAN.search(p) and not p.endswith(".go"):
+                cats.add("plan/spec/ADR/doc write")
+            elif STEER.search(p):
+                cats.add("steering edit")
+            else:
+                cats.add("product edit")
+        elif name == "Bash":
+            c = str(inp.get("command", ""))
+            if GITLEG.search(c):
+                cats.add("git/gh/land legwork")
+            elif GATE.search(c):
+                cats.add("gate run")
+            else:
+                cats.add("read/search")
+        elif name in ("Read", "Grep", "Glob", "ToolSearch") or name.startswith("mcp__"):
+            cats.add("read/search")
+        else:
+            cats.add("other tool")
+    for c in ORDER:
+        if c in cats:
+            return c
+    return "text only"
+
+
+def main() -> int:
+    d, days = Path(sys.argv[1]), float(sys.argv[2])
+    cutoff = time.time() - days * 86400
+    turns = collections.Counter()
+    out = collections.Counter()
+    ctx = collections.Counter()
+    sessions = 0
+    for f in sorted(d.glob("*.jsonl")):
+        if f.stat().st_mtime < cutoff:
+            continue
+        msgs: dict[str, dict] = {}
+        for line in f.open(encoding="utf-8", errors="replace"):
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if e.get("type") != "assistant" or e.get("isSidechain"):
+                continue
+            m = e.get("message") or {}
+            mid = m.get("id")
+            if not mid:
+                continue
+            slot = msgs.setdefault(mid, {"blocks": [], "usage": {}})
+            slot["blocks"].extend(b for b in (m.get("content") or []) if isinstance(b, dict))
+            slot["usage"] = m.get("usage") or slot["usage"]
+        if not msgs:
+            continue
+        sessions += 1
+        for slot in msgs.values():
+            c = classify(slot["blocks"])
+            u = slot["usage"]
+            turns[c] += 1
+            out[c] += int(u.get("output_tokens") or 0)
+            ctx[c] += sum(int(u.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+    T, O, C = sum(turns.values()), sum(out.values()) or 1, sum(ctx.values()) or 1
+    print(f"{sessions} sessions, {T} main-loop turns, window {days:g}d, dir {d.name}")
+    print(f"{'category':28} {'turns':>7} {'%':>5} {'out tok %':>9} {'ctx re-read %':>13}")
+    for c in ORDER:
+        if turns[c]:
+            print(f"{c:28} {turns[c]:7d} {100*turns[c]/T:5.1f} {100*out[c]/O:9.1f} {100*ctx[c]/C:13.1f}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

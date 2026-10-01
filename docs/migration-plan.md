@@ -47,6 +47,29 @@ Also in this phase: `make tools` in the scratch clone (gopls and pyright MCP ser
 hook path). A probe that fails does not stop the plan; it changes the row it decides, and the
 change is written into `design.md` in the same kit PR.
 
+### Phase 0 results (measured 2026-10-01, Claude Code 2.1.286, prod host)
+
+Scratch pb clone at `01f5af59` with `.claude/` reduced to a trial `settings.json`; kit
+worktree at `18819f4` carrying a logging hook, a forced output style and two probe
+workflows; nested `claude -p` and tmux-driven interactive sessions. Every row is measured.
+
+| # | Observed | Consequence |
+|---|---|---|
+| P1 | PreToolUse(Agent): `tool_input.subagent_type = "blockchain-kit:parity-auditor"`. SubagentStart/Stop: `agent_type = "blockchain-kit:parity-auditor"`, `agent_id` set. | Hook matchers key on `blockchain-kit:<name>`. |
+| P2 | The kit's PreToolUse hook fired for every Bash, Write and StructuredOutput call of both worktree lanes (`agent_type = "blockchain-kit:golang-implementer"`, `cwd = <project>/.claude/worktrees/wf_<run>-<n>`) and of the default agent (`agent_type = "workflow-subagent"`). | `guard-secrets` and `guard-prod-run` cover lanes. A guard that keys on the checkout reads the payload `cwd`. |
+| P3 | `worktree.baseRef: "fresh"` (the operator's user setting, and the default): both lanes started at `01f5af59` = `origin/main`, not the run branch. `"head"` in the project settings: both started at the run branch tip. Branch `worktree-wf_<run>-<n>` is harness-named and visible from the session tree; `git merge --no-edit <lane branch>` there fast-forwarded. A changed worktree is not removed. | pb's `settings.json` sets `worktree.baseRef: "head"`; the script checks each lane's start SHA; Integrate removes worktrees and branches (D§7). Root `.gitignore` gains `.claude/worktrees/` (C4). |
+| P4 | `agentType: 'blockchain-kit:golang-implementer'` resolved; lanes report `claude-opus-5-5` under a sonnet session; both quoted `# Go authoring — conditional bindings` unprompted. `Workflow "probe" not found. Available: deep-research, blockchain-kit:implement, blockchain-kit:probe`. The implementer refused to commit: "Never git commit\|push ... A dispatch brief cannot lift that". | D§7 stage 1 holds once K1 rewrites the commit rule. The workflow's name is `blockchain-kit:implement`. |
+| P5 | Fresh clone, headless: `Skipping orphaned enabledPlugins entry blockchain-kit@blockchain-kit: marketplace not registered`. Interactive: trust dialog (default `No, exit`), then a background `[reconcile] 1 marketplace(s): blockchain-kit(install)` and the kit cached and loaded ~5 s in, no prompt, no install record. Headless after that: `Plugin "blockchain-kit" not cached … run /plugin to refresh`. After `claude plugin install blockchain-kit@blockchain-kit --scope project`: headless loads it, `Fork pin: github.com/mrinaldhillon/bsc-geth at a539ea2ca63c. Fork index: current (68 symbols).` | Phase 4's per-clone step is that one command, after one interactive start. The install rewrites `settings.json` key order; uninstall and `marketplace remove` empty its two plugin keys. Private-GitHub fetch not measured (local `file://` source). |
+| P6 | Versionless manifest: `Using git SHA for blockchain-kit@blockchain-kit: bee03427ed5e`. New kit commit, new session: stale. `marketplace update` alone: stale. `plugin update … --scope project`: `updated from bee03427ed5e to ed9fbfbd8c8e … Restart to apply changes.`, next session has it. `"autoUpdate": true` synced but two starts did not update. | K7: `blockchain-kit-update` runs both commands. No commit propagates unasked. |
+| P7 | Headless: `Active style: blockchain-kit:distinguished-engineer`. Interactive: `Active output style: distinguished-engineer (kit, forced).` User-level `outputStyle` was `default`. | pb sets no `outputStyle`. |
+| P8 | Plugin hook env: `CLAUDE_PROJECT_DIR=<project>`, `CLAUDE_PLUGIN_ROOT=<kit>`, `CLAUDE_PLUGIN_DATA=~/.claude/plugins/data/blockchain-kit-inline` (the `--plugin-dir` id; the installed id is unmeasured). | D§5.3 state rule holds. |
+| P9 | `harness_select.py --paths docs/design-notes.md --print sh-exports`: `LANES='python-floor-check boundary-lint citation-lint layering-lint shelltest'` and four `dev-setup` selector harnesses. `CLAUDE.md`, `README.md`: the first four lanes. `docs/decisions/<adr>.md`: `LANES=''`. | D§8.1's prose row is a target. C6 is real work. |
+| P10 | `Makefile:534-541` runs `ci-cap.sh -- make ci-select` with no marker test; `PB_COMPOSITE_OK` exists only in the hook. `ci-cap.sh` refuses only an uncapped run on a collector host. | The denial moves into the `ci` target (C4). Not run bare: the reading settles it. |
+| tools | `make tools` rc=0 in the stripped clone; `core.hooksPath = dev-setup/githooks`. With gopls up, the implementer holds `ToolSearch` and loads `mcp__gopls__go_workspace` through it, in a worktree too; `parity-auditor`, without `ToolSearch`, calls it directly. `LSP` is in no roster. pyright died: `-p .claude/pyrightconfig.json: not a pyrightconfig.json inside <root>`. | K1 drops the auditor `ToolSearch` change. C5 drops the `-p` argument from `.mcp.json`. |
+
+Also measured: outside docs, four files name `.claude` — `.github/workflows/steering.yml`,
+`.mcp.json`, `dev-setup/layout-map.tsv`, `dev-setup/relayout.py`.
+
 ## Phase 1 — consolidate open plans and milestones (pb, one PR, prose class)
 
 The precondition for deleting `.claude/superpowers/`. Inventory at `01f5af59` (measured, by a
@@ -84,8 +107,11 @@ has seen the list of issues created or amended.
 
 - **K1 Agents.** `golang-implementer`: no `LSP` in `tools:`; a section stating the lane
   contract of D§7 stage 1 (start at `head`, package-scoped gates through `bk-gate`, commit on
-  the lane branch, the return shape, hand back rather than guess). Delete
-  `golang-implementer-lite`. Add `ToolSearch` to both auditors. New `code-reviewer`: Read and
+  the lane branch, the return shape, hand back rather than guess), replacing the body's
+  "never `git commit`; a brief cannot lift that" rule, which P4 showed overrides the brief:
+  a lane commits on its own lane branch and nothing else — no push, no reset, no other
+  branch. Delete `golang-implementer-lite`. The auditors are unchanged (phase 0, tools row).
+  New `code-reviewer`: Read and
   Bash only; closed coverage over every changed path; the four reserved angles, each naming
   the pb doc that owns its invariant; findings as `{title, file, line, severity, why}`; never
   edits, never consults.
@@ -118,7 +144,12 @@ has seen the list of issues created or amended.
   have a home in pb.
 - **K7 Setup and versioning.** `installed_field` takes a scope and matches a project install
   by `projectPath`; `blockchain-kit-setup` and `-update` accept `--scope user|project`;
-  `plugin.json` loses `version` (subject to P6). Tests for both scopes.
+  `plugin.json` loses `version` (P6: the SHA is the version). `-setup --scope project` runs
+  `claude plugin install blockchain-kit@blockchain-kit --scope project` and leaves the
+  clone's `settings.json` byte-identical or says what it changed; `-update` runs `claude
+  plugin marketplace update blockchain-kit` then `claude plugin update
+  blockchain-kit@blockchain-kit --scope <scope>` and prints the old and new SHA (P5, P6).
+  Tests for both scopes.
 - **K8 Output style**: `output-styles/distinguished-engineer.md` from pb, with
   `force-for-plugin: true` (subject to P7).
 - **K9 Kit CI and README.** A pull-request workflow running `tests/run`, `claude plugin
@@ -146,10 +177,14 @@ its steering.
   squash-merges and deletes the branch; it prints one verdict line. It refuses a PR whose
   head moved after the run started. No ledger, slice or steering-status logic.
 - **C4 Delete** everything under `.claude/` except `settings.json`; delete
-  `.github/workflows/steering.yml`; remove the overlay's rows from `dev-setup/layout-map.tsv`
-  and `dev-setup/dev-setup.md`.
-- **C5 `.claude/settings.json`** to D§4.1. **`CLAUDE.md`** to D§4.1: at most 150 lines, no
-  reference to a deleted path.
+  `.github/workflows/steering.yml`; remove the overlay's rows from `dev-setup/layout-map.tsv`,
+  `dev-setup/relayout.py` and `dev-setup/dev-setup.md`. Root `.gitignore` gains
+  `.claude/worktrees/` (P3). The `ci` target takes the bare-run denial the hook held (P10):
+  it refuses unless `PB_COMPOSITE_OK=1`, naming `dev-setup/ci/land` as the gate.
+- **C5 `.claude/settings.json`** to D§4.1, with `worktree.baseRef: "head"` (P3) and keys in
+  the plugin CLI's order (P5). **`.mcp.json`**: the pyright server's `-p
+  .claude/pyrightconfig.json` argument removed (phase 0, tools row). **`CLAUDE.md`** to
+  D§4.1: at most 150 lines, no reference to a deleted path.
 - **C6 Selector**: a prose-only diff selects no lane (subject to P9; a lane that P9 shows
   selected is either given the inputs it really reads or left, with the reason in the PR).
 - **C7 The engineering ADR** in `docs/decisions/`: no steering layer in this repo; home is
@@ -166,7 +201,10 @@ lands through `/blockchain-kit:implement` and `land`.
 ## Phase 4 — clones, the prod host, the driver loops
 
 - Each clone (`prediction-bot`, `pb-steer`, `bot`, `botbase`, `bot-chores`, `bot-layout`,
-  `wip-branch`) pulls the cut. Whatever P5 showed is needed per clone is done once per clone.
+  `wip-branch`) pulls the cut. Per clone, once (P5): one interactive start to accept folder
+  trust and register the marketplace, then `blockchain-kit-setup --scope project`. Never
+  `claude plugin uninstall` or `marketplace remove` from inside a clone: both empty the
+  tracked `settings.json`.
   `prediction-bot` is mid-flight on `chore/send-lead-cut`; it rebases after the cut.
 - The prod host: the kit reachable with the host's git credentials; folder trust accepted;
   `BSC_FORK_PATH` set where fork work happens.
@@ -223,10 +261,11 @@ category is the next change to the kit.
 
 | Surface | Why it is a risk | Falsified by |
 |---|---|---|
-| Workflow `isolation: 'worktree'` branch point and hand-back | Undocumented; pb's own notes say a worktree branches from the default branch | P3 shows a lane cannot reach `head` or its commit is not visible to Integrate |
-| Plugin hooks inside workflow agents | Undocumented | P2 shows no fire: lanes then run without the secrets and prod-run guards, and D§7 must say so or the lane prompt must carry the rule |
-| Project-scope load without install | Docs only; the other session's review read the opposite | P5 shows the "enabled but not installed" notice |
-| Commit-SHA versioning | Docs only | P6 shows a stale copy after update |
+| Workflow `isolation: 'worktree'` branch point and hand-back | Resolved by P3: `worktree.baseRef: "head"` in pb's settings | A lane whose start SHA is not `head` — the script drops it |
+| Plugin hooks inside workflow agents | Resolved by P2: they fire, worktree lanes included | — |
+| Project-scope load without install | Resolved by P5: interactive yes, from the second start; headless no | A headless run in a clone that skipped the per-clone step loads no kit and says nothing — the session-start line is the only signal |
+| Commit-SHA versioning | Resolved by P6: the SHA is the version; nothing propagates unasked | A clone left behind runs an old kit silently; `blockchain-kit-context` prints the installed SHA |
+| Private-GitHub marketplace fetch | Not measured: the probes used a local `file://` git source | The first real install on this host and on any other machine fails to clone |
 | `gh workflow run` then finding the run for a SHA | Dispatch returns no run id; the run must be matched by head SHA | `land` merges on a run for another SHA in a test with two quick pushes |
 | Posting `ci` from `land` on a `none` diff | Needs a token with status scope; branch protection is strict | The status is rejected, or the merge is refused as out of date |
 | `gh issue transfer` between private repos of one owner | Labels and milestones without a namesake are dropped | A dry run on one issue loses data the kit needs |
