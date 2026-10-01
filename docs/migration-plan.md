@@ -23,6 +23,10 @@ agents, skills and the workflow are proven by one live run each, recorded in the
   only in the phase that names them, after that phase's dry-run list has been shown.
 - The pb tag `steering-final` is created on the commit before the cut and is never moved.
 - A harness fact from D§9 is a hypothesis until its probe in phase 0 passes.
+- **Hold (operator, 2026-10-01): nothing merges to pb `main`, and no context a session working
+  from `main` would use changes, until the operator lifts it.** A parallel session is writing
+  a spec and a plan from `main`. Phase 1's PR (#892) stays a draft and phase 3 does not start.
+  Phase 2 touches no pb file and proceeds.
 
 ## Phase 0 — probes (no tracked edits)
 
@@ -99,9 +103,13 @@ Tasks:
 - **A5 Open steering plans are closed, not carried.** A steering plan's remaining tasks are
   listed for phase 6 as candidates, with the default "obsolete".
 
-Done: the A1 table is in the PR body with no row in state "unknown"; `git grep -n
-'superpowers/' -- docs CLAUDE.md` returns only SHA-pinned historical citations; the operator
-has seen the list of issues created or amended.
+Done: the A1 table is in the PR body with no row in state "unknown"; every hit of `git grep
+-n 'superpowers/' -- docs CLAUDE.md` is a SHA-pinned historical citation or falls in one of
+three classes left as written; the operator has seen the list of issues created or amended.
+The three classes (measured on pb PR #892 at `36690148`): paths under `sdd/` that no ref ever
+tracked (ADR 0025, `host-tuning-research-2026-08.md`), which no SHA can pin; `superpowers/`
+paths in the bsc-geth repository, cited at fork SHAs already; and the two pipeline lines in
+`CLAUDE.md`, which is live steering text with one writer, phase 3.
 
 ## Phase 2 — the kit absorbs (kit, one PR from `steering-home`)
 
