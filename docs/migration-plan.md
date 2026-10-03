@@ -201,9 +201,10 @@ its steering.
   before merge and is the operator-visible GitHub write of this phase.
 
 Done: `git ls-files .claude` prints one path; `git grep -n -F '.claude/' -- ':!docs/decisions'
-':!docs/reports' ':!research'` prints nothing outside SHA-pinned citations; a fresh session
-in a fresh clone shows the kit's routing table and no stray-file line; a one-line `docs/`
-change lands through `dev-setup/ci/land` with zero Actions minutes; one real product unit
+':!dev-setup/decisions' ':!docs/reports' ':!research'` prints nothing outside SHA-pinned citations; a fresh session
+in a fresh clone shows the kit's routing table and no stray-file line; a one-line change under
+a ceremony-free root lands through `dev-setup/ci/land` with zero Actions minutes, and a
+one-line prose change with a run that sets up no toolchain; one real product unit
 lands through `/blockchain-kit:implement` and `land`.
 
 ## Phase 4 — clones, the prod host, the driver loops
@@ -213,7 +214,10 @@ lands through `/blockchain-kit:implement` and `land`.
   trust and register the marketplace, then `blockchain-kit-setup --scope project`. Never
   `claude plugin uninstall` or `marketplace remove` from inside a clone: both empty the
   tracked `settings.json`.
-  `prediction-bot` is mid-flight on `chore/send-lead-cut`; it rebases after the cut.
+  `prediction-bot` is left untouched (operator, 2026-10-03): the operator starts later work
+  in a fresh clone path. In every other clone, delete the untracked steering scratch the old
+  `.claude/.gitignore` hid (`.claude/state/`, `.claude/context/`, `.claude/superpowers/sdd/`).
+  It is archived in `steering-archive-2026-10-03`.
 - The prod host: the kit reachable with the host's git credentials; folder trust accepted;
   `BSC_FORK_PATH` set where fork work happens.
 - `milestone_run.py` and the conductor are gone with the layer. Unattended work, if wanted
