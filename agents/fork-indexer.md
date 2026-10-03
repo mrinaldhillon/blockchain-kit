@@ -67,7 +67,7 @@ Output: a short report of what was confirmed/corrected and any symbol still
   in one message; one call per turn wastes a round trip.
 - **Heavy local work follows the repo's run rule.** `make fork-index` and a
   `./...` suite are heavy: in prediction-bot they run in a capped unit
-  (`dev-setup/ci/unit_run.py`, ADR 0105). Known-long commands run as background
+  (`dev-setup/ci/unit_run.py`). Known-long commands run as background
   Bash from the start; a background Bash re-invokes you on exit, so never wait
   with `sleep` or a `while … sleep` loop.
 

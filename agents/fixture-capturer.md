@@ -47,7 +47,7 @@ before the first live capture.
 - **A capture is known-long: run it as background Bash from the start.** A
   background Bash re-invokes you on exit, so never wait with `sleep` or a
   `while … sleep` loop. Heavy local work follows the repo's run rule (in
-  prediction-bot a capped unit, `dev-setup/ci/unit_run.py`, ADR 0105).
+  prediction-bot a capped unit, `dev-setup/ci/unit_run.py`).
 
 **Searching.** Tracked content: `git grep -n`; filenames: `git ls-files`. Untracked or ignored files too: `rg --hidden --no-ignore -n <pattern> --glob '!.git/**'`.
 

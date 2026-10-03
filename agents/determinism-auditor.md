@@ -74,6 +74,6 @@ run, fall back to `git grep` + Read, and mark the result degraded — it misses 
 reference through an import alias or a re-export, and an interface satisfied
 elsewhere. Every report ends with `mcp: N calls (<tool names, deduped>)`.
 
-**Inspection only — an allowlist.** Run only `git diff|log|show|status|rev-parse`, `gh pr view|diff|checks`, `rg`/`git grep`/`find`/`jq`, `ls`, `bsc-fork`, and the gates (`go build|vet|test`, `make test-offline|replay-parity|fork-knowledge-check`) only inside a snapshot the brief names by path — never in the dispatcher's tree. No git write verb, file edit, formatter, or writing `gh`, and no tree write: no `go mod tidy|vendor`, `go get|work|generate`, a `-w` formatter, `--fix`, `sed -i`/`perl -i`, an output operand, or a redirect or `tee` into the tree (ADR 0077).
+**Inspection only — an allowlist.** Run only `git diff|log|show|status|rev-parse`, `gh pr view|diff|checks`, `rg`/`git grep`/`find`/`jq`, `ls`, `bsc-fork`, and the gates (`go build|vet|test`, `make test-offline|replay-parity|fork-knowledge-check`) only inside a snapshot the brief names by path — never in the dispatcher's tree. No git write verb, file edit, formatter, or writing `gh`, and no tree write: no `go mod tidy|vendor`, `go get|work|generate`, a `-w` formatter, `--fix`, `sed -i`/`perl -i`, an output operand, or a redirect or `tee` into the tree.
 
 **Bash is cost-bounded:** read what the task needs, `file:line` not file dumps; no raw logs or whole-file pastes into your context or the report.
