@@ -44,7 +44,7 @@ The class is read off the diff, and the class decides the ceremony.
 
 | Class | The diff | Gate | Review | Record |
 |---|---|---|---|---|
-| Prose | docs, comments, `CLAUDE.md` | none: `land` posts `ci` with no run | none | none |
+| Prose | docs, comments, `CLAUDE.md` | the lints that read prose, no toolchain setup; a diff only under `docs/decisions`, `docs/reports`, `docs/reviews`, `docs/design` or `dev-setup/decisions` gets `ci` posted with no run | none | none |
 | Tooling | `dev-setup/`, `scripts/`, Makefile, CI workflow, `tools/` | the lanes the selector names | none | none |
 | Product Go | `cmd/`, `internal/` | the lanes the selector names | one seat at merge: the workflow's, or one `blockchain-kit:code-reviewer` dispatch | none |
 | Guarded Go | record spine, hot path, money path | the same, plus `make replay-parity` when owed | the same, and you read the diff | an ADR only when an invariant, a stored-data contract or a boundary changes |
