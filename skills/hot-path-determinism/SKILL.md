@@ -24,8 +24,6 @@ Working discipline on any diff here:
   pre-scan of exactly these footguns). It never substitutes for the gate: the
   pre-merge review re-checks and subsumes its findings, and
   `make replay-parity` (rule 32) is the authority.
-- `OrderingVersion` (`internal/feedid/feedid.go`) moves only as a deliberate,
-  test-pinned bump — never as a side effect of an edit here.
-- The stored-data contract is absolute (rule 42): eternal payload, additive
-  envelope, version-gated readers; deprecate a dataset only via
-  `docs/data-deprecations/`.
+- `OrderingVersion` and the stored-data contract (rule 42): `docs/specs/log-format.md`
+  (the `OrderingVersion` pin) and `docs/discipline.md` rule 42; a dataset is deprecated only
+  via `docs/data-deprecations/`.

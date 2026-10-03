@@ -21,7 +21,7 @@ description: >-
 | Topic | Doc |
 |---|---|
 | Recording set: streams, kinds, sources | `docs/specs/recorder-binance.md` §2, §2.1, §2.2 |
-| Perp hosts and routed bases (`/public/ws`, `/market/ws`) | `docs/specs/recorder-binance.md` §2.1; `docs/decisions/0027-forceorder-recovery-endpoint-routing-misdiagnosis.md` |
+| Perp hosts and routed bases | `docs/specs/recorder-binance.md` §2.1; `docs/decisions/0027-forceorder-recovery-endpoint-routing-misdiagnosis.md` |
 | Spot hosts, one connection per stream, 24h rotation, overlap, timer defaults | `docs/specs/recorder-binance.md` §3 |
 | API key, `X-MBX-APIKEY`, ping/pong, proxy scope, symbol case | `docs/specs/recorder-binance.md` §3.1 |
 | Envelope mapping, pollers, watchdog, `Poller.Valid` | `docs/specs/recorder-binance.md` §4 |

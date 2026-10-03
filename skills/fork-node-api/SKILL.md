@@ -28,7 +28,7 @@ description: >-
 | Reconnect, drops, drain, cut-off | `docs/specs/nodeapi.md` §6; `docs/fork-knowledge/node-api.md` §Subscription delivery is out-of-band from its error |
 | Invariants | `docs/specs/nodeapi.md` §7 |
 | Millisecond block time (BEP-520) | `docs/fork-knowledge/block-time.md` |
-| Reorg vs gap, ancestry proof, no `Removed` field | `docs/design-notes.md` §4.5; `docs/specs/event-schema.md` §6 |
+| Reorg vs gap, ancestry proof; removed-log frames refused, no `Removed` field | `docs/specs/event-schema.md` §6; `docs/design-notes.md` §4.5 |
 | Whether an index row holds at this pin | `docs/fork-knowledge/README.md` §Bootstrap and maintenance |
 | A doc that disagrees with code or the fork source | `docs/discipline.md` §43 |
 
@@ -39,7 +39,7 @@ description: >-
 **What only this skill says**
 - Never answer a node or RPC question from upstream go-ethereum or bnb-chain/bsc documentation or memory. An API without a fork `file:line` does not exist here; cite the anchor when you assert one.
 - Trust a custom binding only while its row is `verified: true` in an index built at the current pin (`blockchain-kit:fork-lookup`).
-- With `go.work` active, prefer the gopls MCP tools (`go_search`, `go_symbol_references`, `go_package_api`) to grep: they return the fork `file:line`.
+- With `go.work` active, prefer the gopls MCP tools (`go_search`, `go_symbol_references`, `go_package_api`) to grep: they return the fork `file:line` at the checkout's HEAD, which may sit past the pin (`bsc-fork pin` says where).
 - A doc that disagrees with the fork source or with `internal/nodeapi/live.go` is adjudicated, never auto-resolved (`docs/discipline.md` §43). A reading of the fork source at the pin is an observation: the doc is fixed in the same PR or superseded by an ADR. Against pb's own code neither side is presumed right: either the code broke a decided invariant (a code bug; restore the decided behavior) or the decision changed (fix the doc in the same PR, or append a superseding ADR).
 - The import wiring is decided (ADR 0002); do not reopen it.
 - Before writing node code, check it against `docs/specs/nodeapi.md` §2 and §7 and `docs/design-notes.md` §4.5.

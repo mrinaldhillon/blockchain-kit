@@ -21,8 +21,8 @@ description: >-
 | Topic | Doc |
 |---|---|
 | Parser purity; `accounts/abi` over `go:embed` ABIs; what is forbidden | `docs/specs/event-schema.md` §7 |
-| Decoder per kind and stream; router selector dispatch | `docs/specs/event-schema.md` §7 (table) |
-| Unmodeled router selectors | `docs/specs/state.md` §5b |
+| Decoder per kind and stream | `docs/specs/event-schema.md` §7 (table) |
+| Router selector dispatch; unmodeled router selectors | `docs/specs/state.md` §5b |
 | `Raw` of a log and of a pending tx | `docs/specs/nodeapi.md` §3 |
 | Prediction V2 address, events, admin-derived params | `docs/architecture.md` §8.3; `docs/discipline.md` rule 25 |
 | Chainlink BNB/USD and USDT/USD: proxy, aggregator rotation, deferred OCR events | `docs/architecture.md` §8.4 |
@@ -36,7 +36,7 @@ description: >-
 - `make test-offline` (Makefile) — decoders against frozen fixtures.
 - `make boundary-lint` (Makefile) — the §3 table and the depguard rules agree; `make lint` enforces depguard.
 - `go test -tags parsers_live ./internal/parsers` (`internal/parsers/parsers_live_test.go`) — NETWORK, read-only: the embedded ABIs against a running node.
-- gopls MCP `go_package_api` on `github.com/ethereum/go-ethereum/accounts/abi` (`.mcp.json`) — the `accounts/abi` API at the pin.
+- gopls MCP `go_package_api` on `github.com/ethereum/go-ethereum/accounts/abi` (`.mcp.json`) — the `accounts/abi` API at the go.mod pin when no `go.work` is active (with `go.work`, at the checkout's HEAD).
 
 **What only this skill says**
 - Cite an `accounts/abi` call at the pin (`blockchain-kit:fork-lookup`), never from upstream docs or memory.

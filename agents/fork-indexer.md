@@ -15,8 +15,8 @@ maxTurns: 150
 You distill the private BSC fork (branch `mrinal/dev`) into committed context so other
 sessions never re-parse it (discipline rule 43). The default path is `make fork-index`
 with no checkout at all: it runs against the read-only module cache, deriving SHA and
-commit time from `scripts/fork-pin.sh` (see the `fork-lookup` skill, "Adding a pinned
-entry"). `BSC_FORK_PATH=<checkout>` (or `make go.work`) is the fork-co-development
+commit time from `scripts/fork-pin.sh` (pb `docs/fork-knowledge/README.md` §Bootstrap and maintenance:
+the "No checkout needed" and "Entries" bullets). `BSC_FORK_PATH=<checkout>` (or `make go.work`) is the fork-co-development
 path, where a real checkout is present and git stays authoritative (ADR 0015).
 
 ## When to invoke

@@ -19,10 +19,10 @@ description: >-
 
 | Topic | Doc |
 |---|---|
-| Declared environment, resolution order, defaults, `ConfigHash` exclusion | `docs/operations.md` §7 |
+| Declared environment, resolution order, defaults, flag spellings per binary, `ConfigHash` exclusion | `docs/operations.md` §7 |
 | Proxy edge rules and flag wiring (`ResolveBinanceProxy`, `BinanceProxyFlagSetIn`) | `docs/operations.md` §7 |
 | Prod pre-deploy check: no `BINANCE_PROXY` reachable | `docs/operations.md` §7 |
-| Dev box: `PB_ENV`, dotenv, flag spellings, tunnels, proxy | `dev-setup/dev-setup.md` §Environment detection, §BSC node, §Binance |
+| Dev box: `PB_ENV`, dotenv, tunnels, proxy | `dev-setup/dev-setup.md` §Environment detection, §BSC node, §Binance |
 | Why declared; `IsProd`; how tests exercise `Detect` | `docs/decisions/0031-environment-declared-never-detected.md` |
 | Transport dispatch: IPC path vs `ws://` | `docs/specs/nodeapi.md` §5 |
 | Binance credential and egress | `docs/specs/recorder-binance.md` §3.1 |

@@ -38,6 +38,6 @@ description: >-
 **What only this skill says**
 - Ask `bsc-fork`; never `Read` `docs/fork-knowledge/symbols.json` to find a row. Exit 1: no such row or stale; 2: no pin or no index; `--json` for a script.
 - Read a fork `file:line` anchor at the path `bsc-fork path --pinned` prints: the pin's read-only tree in the module cache, never a checkout whose HEAD sits past the pin.
-- For a fork package pb imports, the gopls MCP tools answer at the pin: `go_package_api` (`packagePaths`) for its exported API, `go_symbol_references` (a bare `X` or `T.M`, never `pkg.X`) for pb's call sites. They are absent in CI. Grep the fork tree last, and for non-Go text.
+- For a fork package pb imports, the gopls MCP tools answer at the go.mod pin, from the module cache, when no `go.work` is active (with `go.work` they resolve the checkout at its HEAD): `go_package_api` (`packagePaths`) for its exported API, `go_symbol_references` (a bare `X` or `T.M`, never `pkg.X`) for pb's call sites. They are absent in CI. Grep the fork tree last, and for non-Go text.
 - Cite the fork `file:line` when you assert an API; a `verified:false` row is not evidence until you have confirmed it there.
 - Re-parse only on drift or an absent symbol. Regenerating is the `blockchain-kit:fork-indexer` agent's.
