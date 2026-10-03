@@ -192,7 +192,7 @@ its steering.
 - **C5 `.claude/settings.json`** to D§4.1, with `worktree.baseRef: "head"` (P3) and keys in
   the plugin CLI's order (P5). **`.mcp.json`**: the pyright server's `-p
   .claude/pyrightconfig.json` argument removed (phase 0, tools row). **`CLAUDE.md`** to
-  D§4.1: at most 150 lines, no reference to a deleted path.
+  D§4.1: cut by kind, not by length (operator, 2026-10-03), no reference to a deleted path.
 - **C6 Selector**: a prose-only diff selects no lane (subject to P9; a lane that P9 shows
   selected is either given the inputs it really reads or left, with the reason in the PR).
 - **C7 The engineering ADR** in `docs/decisions/`: no steering layer in this repo; home is
