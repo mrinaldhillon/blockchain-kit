@@ -280,7 +280,7 @@ class, and the class is read off the diff:
 
 | Class | The diff | Branch and PR | Gate | Review | Record |
 |---|---|---|---|---|---|
-| Prose | docs, comments, `CLAUDE.md` only | any branch; rides with the code change it belongs to when there is one | the lanes that read prose: `citation-lint` and `layering-lint` (with `python-floor-check`), no toolchain setup; a diff under the ceremony-free roots is classed `none` and `land` posts `ci` without a run | none | none |
+| Prose | docs, comments, `CLAUDE.md` only | any branch; rides with the code change it belongs to when there is one | none: the selector classes it `none` and `land` posts `ci` without a run | none | none |
 | Tooling | `dev-setup/`, `scripts/`, Makefile, CI workflow, root `tools/` | one branch | the lanes the selector names | none | none |
 | Product Go | `cmd/`, `internal/` | one branch | the lanes the selector names | one seat at merge (the workflow's, or one `code-reviewer` dispatch) | none |
 | Guarded Go | record spine, hot path, money path | one branch | the same, plus `make replay-parity` when owed | the same, plus the main loop reads the diff | an ADR only when an invariant, a stored-data contract or a boundary changes |
@@ -294,16 +294,15 @@ Rules that follow:
 - **A fact has one home, so a change has one edit.** The mirrors go with the layer: roster
   tables, index files, the skill manifest, tracking rows, the lockstep files and the lints
   that held them in agreement.
-- **The selector is the only judge of what CI runs.** A lane runs when the diff touches a
-  file the lane reads, and that rule outranks the wish for prose to run nothing. Two lanes
-  read prose for their verdict: `citation-lint` (a `git grep` for numeric design-notes
-  citations over every tracked file) and `layering-lint` (prose naming a tree it must not).
-  So a prose diff selects those two, plus `python-floor-check`, which arms wherever
-  `python3` runs. It selects no harness and no toolchain setup (measured on the phase-3
-  branch, select.py row 16). Only the ceremony-free roots (`docs/decisions/`,
-  `docs/reports/`, `docs/reviews/`, `docs/design/`, `dev-setup/decisions/`) select
-  nothing. Before row 16, at `01f5af59`, any other `docs/*.md` also selected
-  `boundary-lint`, `shelltest` and four selector harnesses.
+- **The selector is the only judge of what CI runs.** A prose-only PR gets no CI run
+  (operator, 2026-10-04): the selector gives `docs/**/*.md` and root `*.md` no lane, the
+  classifier calls such a diff `none`, and `land` posts `ci` without a run, as it does for
+  the record roots (`docs/decisions/`, `docs/reports/`, `docs/reviews/`, `docs/design/`,
+  `dev-setup/decisions/`). Three doc paths are lane inputs, not prose, and keep their
+  lanes: `docs/fork-knowledge/` and `docs/data-deprecations/` (Go tests read them) and
+  `docs/architecture.md` (`boundary-lint` reads its package table). The cost is accepted:
+  `citation-lint` and `layering-lint` do read prose, so a hit a prose-only PR introduces
+  shows at the next non-prose PR or the weekly all-lanes run, not at its own merge.
 - **Nothing is gated twice.** There is no local composite before the GitHub run and no
   per-slice gate before the merge gate.
 

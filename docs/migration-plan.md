@@ -3,6 +3,11 @@
 Date 2026-10-01. Implements `docs/design.md` (cited as D§n). Bases: prediction-bot (pb)
 `01f5af59`, blockchain-kit `6796a58`, bsc-geth `mrinal/dev`.
 
+**Status (2026-10-04).** Phases 0 and 2: done (kit PR #1, `f73be93`). Phase 1: done (pb #892
+as `0ffe6cf7`; #902 as `43bc699c` for the #868 records, which landed after phase 1's base).
+Phase 3: kit PR #3 and pb PR #903 are open on pb base `43bc699c`; C8 and the merge wait for
+the operator. Phases 4 to 7: not started.
+
 **Style:** contract-first. Each task states what must be true when it is done and how that is
 observed. Bodies are written at execution.
 
@@ -23,10 +28,11 @@ agents, skills and the workflow are proven by one live run each, recorded in the
   only in the phase that names them, after that phase's dry-run list has been shown.
 - The pb tag `steering-final` is created on the commit before the cut and is never moved.
 - A harness fact from D§9 is a hypothesis until its probe in phase 0 passes.
-- **Hold (operator, 2026-10-01): nothing merges to pb `main`, and no context a session working
-  from `main` would use changes, until the operator lifts it.** A parallel session is writing
-  a spec and a plan from `main`. Phase 1's PR (#892) stays a draft and phase 3 does not start.
-  Phase 2 touches no pb file and proceeds.
+- **Hold (operator, 2026-10-01; lifted 2026-10-03 for phase 3 up to C8 and the merge).**
+  While it stood, nothing merged to pb `main` and no context a session working from `main`
+  would use changed. Each remaining merge and the branch-protection edit are asked.
+- **`../prediction-bot` is never touched (operator, 2026-10-03).** Later pb work starts in a
+  fresh clone.
 
 ## Phase 0 — probes (no tracked edits)
 
@@ -193,8 +199,9 @@ its steering.
   the plugin CLI's order (P5). **`.mcp.json`**: the pyright server's `-p
   .claude/pyrightconfig.json` argument removed (phase 0, tools row). **`CLAUDE.md`** to
   D§4.1: cut by kind, not by length (operator, 2026-10-03), no reference to a deleted path.
-- **C6 Selector**: a prose-only diff selects no lane (subject to P9; a lane that P9 shows
-  selected is either given the inputs it really reads or left, with the reason in the PR).
+- **C6 Selector**: a prose-only diff selects no lane and gets no CI run (operator,
+  2026-10-04). Doc paths a lane reads as data stay lane inputs: `docs/fork-knowledge/`,
+  `docs/data-deprecations/`, `docs/architecture.md`.
 - **C7 The engineering ADR** in `docs/decisions/`: no steering layer in this repo; home is
   blockchain-kit; supersedes 0032.
 - **C8 Branch protection**: required contexts become `ci` alone. This is the PR's last step
@@ -202,9 +209,8 @@ its steering.
 
 Done: `git ls-files .claude` prints one path; `git grep -n -F '.claude/' -- ':!docs/decisions'
 ':!dev-setup/decisions' ':!docs/reports' ':!research'` prints nothing outside SHA-pinned citations; a fresh session
-in a fresh clone shows the kit's routing table and no stray-file line; a one-line change under
-a ceremony-free root lands through `dev-setup/ci/land` with zero Actions minutes, and a
-one-line prose change with a run that sets up no toolchain; one real product unit
+in a fresh clone shows the kit's routing table and no stray-file line; a one-line `docs/`
+change lands through `dev-setup/ci/land` with zero Actions minutes; one real product unit
 lands through `/blockchain-kit:implement` and `land`.
 
 ## Phase 4 — clones, the prod host, the driver loops
