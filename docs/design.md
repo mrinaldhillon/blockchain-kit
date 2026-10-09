@@ -145,7 +145,9 @@ Each hook has a kill switch in the `BLOCKCHAIN_KIT_*` family and reads project s
   windows measured. `blockchain-kit-update` runs `claude plugin marketplace update` then
   `claude plugin update blockchain-kit@blockchain-kit --scope project`, and the next session
   has the commit (measured). The marketplace entry keeps the relative source `./`.
-- Kit CI: `tests/run`, `claude plugin validate .`, shellcheck and ruff, on pull requests.
+- No kit CI and no required check: a change to steering carries no gate (operator,
+  2026-10-09). `tests/run`, `claude plugin validate .`, shellcheck and ruff are local tools,
+  run by hand when a change touches what they cover.
 
 ## 6. Disposition of pb's current layer
 

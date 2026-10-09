@@ -166,8 +166,8 @@ paths in the bsc-geth repository, cited at fork SHAs already; and the two pipeli
   Tests for both scopes.
 - **K8 Output style**: `output-styles/distinguished-engineer.md` from pb, with
   `force-for-plugin: true` (subject to P7).
-- **K9 Kit CI and README.** A pull-request workflow running `tests/run`, `claude plugin
-  validate .`, shellcheck and ruff. README: the layout, the working model, project-scope
+- **K9 README.** (The kit CI this item first called for was removed on 2026-10-09: steering
+  carries no check.) README: the layout, the working model, project-scope
   enablement; the "Adopting it" section replaced by a pointer to `docs/`.
 
 Done: `tests/run` and `claude plugin validate .` green; one live `/blockchain-kit:implement`
