@@ -33,10 +33,15 @@ anything here.
    `owed.parity`: run `make replay-parity` once. `owed.read`: read those diffs yourself.
 6. **Land** with `dev-setup/ci/land <PR>`: it runs the lanes the diff selects on the PR head and
    squash-merges on green. Merging needs no confirmation in prediction-bot; a production deploy
-   is a separate decision and is the operator's.
+   is a separate decision and is the operator's. `land` runs in the foreground under
+   `timeout 590`: on srv the harness kills background tasks under memory pressure. A re-run
+   attaches to the live CI run.
 
 One unit, or a change too small to brief, skips steps 3 to 5: dispatch
 `blockchain-kit:golang-implementer` once, or make a prose or tooling edit yourself.
+
+When the operator is offline, run the approved plan to completion and batch what only they
+can answer for the end (operator, 2026-09-09).
 
 ## What a change owes
 
@@ -71,6 +76,8 @@ The class is read off the diff, and the class decides the ceremony.
   dispatch.
 - A critic is terminal: it returns findings and consults no one. A worker with a question
   hands back.
+- On a Fable main loop the advisor is called only to attack an inference you have stated:
+  give your read first and stand on it (operator, 2026-09-17).
 
 ## The fork
 
@@ -78,6 +85,12 @@ bsc-geth is developed from a prediction-bot session, in the checkout `BSC_FORK_P
 Fork units go through the same workflow with `fork` set: serial, on a branch cut from
 `mrinal/dev`, gated by `make audit-ext`. A change that spans both repositories is two runs, the
 fork's first, then the pin move (`blockchain-kit:fork-development`).
+
+## On srv
+
+- `pkill -f` matches the harness's own command line and kills the session. Kill by PID.
+- The `go` on `PATH` is the one `go.mod` names; never put another Go's `bin` first.
+- GitHub serves no diff for a PR over 300 files (`gh pr diff`: HTTP 406). Use `git diff`.
 
 ## Evidence
 

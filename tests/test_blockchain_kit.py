@@ -288,6 +288,30 @@ class Kit(unittest.TestCase):
         self.assertEqual((done.returncode, done.stdout.strip()), (0, f"{geth}/go.mod"))
         self.assertEqual(self.fork("path", "--checkout", "go.mod").returncode, 1)  # none named
 
+    def test_search_needs_every_term_and_ranks_a_name_match_first(self):
+        done = self.fork("search", "header")  # in two symbols, and in MilliTimestamp's signature only
+        self.assertEqual(done.returncode, 0, done.stderr)
+        lines = done.stdout.splitlines()
+        self.assertEqual([line.split()[1] for line in lines], ["GetHeaderByHash", "GetHeaderByHash", "MilliTimestamp"])
+        done = self.fork("search", "header", "chain")  # every term, anywhere in the row
+        self.assertEqual(done.stdout.split(), ["method", "GetHeaderByHash", "core/headerchain.go:502", "UNVERIFIED"])
+        done = self.fork("search", "--limit", "1", "header")
+        self.assertEqual(done.stdout.splitlines()[1:], ["(2 more: raise --limit, or add a term)"])
+        rows = json.loads(self.fork("--json", "search", "BEP-520").stdout)
+        self.assertEqual([(r["symbol"], r["line"]) for r in rows], [("MilliTimestamp", 167)])
+        done = self.fork("search", "header", "absent")
+        self.assertEqual((done.returncode, done.stdout), (1, ""))
+        self.assertIn("no row mentions header and absent", done.stderr)
+
+    def test_list_filters_by_kind_and_verification(self):
+        self.assertEqual(len(self.fork("list").stdout.splitlines()), 3)
+        done = self.fork("list", "--unverified")
+        self.assertEqual(done.stdout.split(), ["method", "GetHeaderByHash", "core/headerchain.go:502", "UNVERIFIED"])
+        self.assertEqual(len(json.loads(self.fork("--json", "list", "--kind", "method").stdout)), 3)
+        done = self.fork("list", "--kind", "function")
+        self.assertEqual((done.returncode, done.stdout), (1, ""))
+        self.assertIn("kinds in this index: method", done.stderr)
+
     def test_outside_a_fork_client_is_exit_2(self):
         for cwd in ("geth", "notes"):
             done = self.fork("pin", cwd=cwd)

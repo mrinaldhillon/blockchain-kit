@@ -2,77 +2,46 @@
 name: binance-streams
 description: >-
   Use when capturing, framing, or decoding Binance market data — SBE @depth20 /
-  raw @trade, JSON @aggTrade, REST depth snapshots, the SBE schema, the Ed25519
-  key, the 24h connection limit / overlap-reconnect, or the dev SOCKS5 proxy.
-  Trigger for internal/binance, collector-binance-spot, and the binance parsers.
+  raw @trade, JSON @aggTrade, REST depth snapshots, USD-M perp streams and
+  forceOrder, the SBE schema, the Ed25519 key, the 24h connection limit /
+  overlap-reconnect, or the dev SOCKS5 proxy. Trigger for internal/binance,
+  collector-binance-spot and collector-binance-perp, and the binance parsers
+  (internal/parsers/binance).
 ---
 
-# Binance streams (M1 BNBUSDT spot)
+# Binance streams
 
-Spec: `docs/specs/recorder-binance.md` (and `docs/specs/binance.md`). M1 captures
-RAW and round-trips it; all decoding is deferred (read-time pure functions).
+**Load when**
+- Editing `internal/binance`, `cmd/collector-binance-spot`, `cmd/collector-binance-perp` or `internal/parsers/binance`.
+- Answering what a Binance stream carries, where it connects, or how a connection rotates.
+- Adding a symbol, a stream, a poller or a decoder.
 
-## Endpoints
-- **SBE market data** `wss://stream-sbe.binance.com`: `@depth20` (50ms,
-  self-contained top-20 snapshots — a dropped frame self-heals on the next, no
-  resync machinery) and raw `@trade` (archival, recorder-only). Microsecond
-  timestamps. **Ed25519 key required in the `X-MBX-APIKEY` connect header**
-  (public market data needs no signature). SBE can multiplex ≤1024 streams on one
-  connection, but **M1 uses one path-based connection per stream**
-  (`/ws/<symbol>@depth20`, `@trade`): raw SBE frames aren't self-identifying
-  before decode, so stream identity must come from the connection, not the bytes
-  (`internal/binance`; observed @depth20≈682 B, @trade≈115 B — data-shapes.md).
-- **JSON** `wss://data-stream.binance.vision`: `@aggTrade` (SBE has no aggregated
-  trade). The legacy `stream.binance.com/public` path was decommissioned upstream. M1 connects to the single-stream path `/ws/<symbol>@aggTrade`, which
-  yields the **bare** event `{e:"aggTrade",E,s,a,p,q,f,l,T,m,M}` (NOT the combined
-  `{"stream":…,"data":…}` wrapper — that's only on `/stream?streams=`).
-- **REST** `https://api.binance.com`: periodic full-depth snapshots (deep-book
-  optionality), IP-weight-limited → low cadence with headroom.
+**Where the facts live** (pb repo paths)
 
-## Connection lifecycle
-A single SBE connection is valid for **24h**; a `serverShutdown` event is sent
-**~10 minutes before** disconnect. M1 uses a **deterministic timer** at
-`ConnTTL - OverlapLead` (default 23h50m) — the timer fires before the server's
-notice so there is no gap without parsing `serverShutdown`. Handling
-`serverShutdown` as an early-trigger is deferred until its SBE frame shape is
-captured (data-shapes.md "to fill"). **overlap-reconnect** — open the new
-connection before the old drops — is the mechanism regardless (operations.md §8).
-Server pings ~every 20s; pong within 60s.
+| Topic | Doc |
+|---|---|
+| Recording set: streams, kinds, sources | `docs/specs/recorder-binance.md` §2, §2.1, §2.2 |
+| Perp hosts and routed bases | `docs/specs/recorder-binance.md` §2.1; `docs/decisions/0027-forceorder-recovery-endpoint-routing-misdiagnosis.md` |
+| Spot hosts, one connection per stream, 24h rotation, overlap, timer defaults | `docs/specs/recorder-binance.md` §3 |
+| API key, `X-MBX-APIKEY`, ping/pong, proxy scope, symbol case | `docs/specs/recorder-binance.md` §3.1 |
+| Envelope mapping, pollers, watchdog, `Poller.Valid` | `docs/specs/recorder-binance.md` §4 |
+| Bot-consumed vs recorder-only streams; no `bookTicker` | `docs/specs/recorder-binance.md` §2, §5 |
+| SBE `blockLength` validation | `docs/specs/recorder-binance.md` §8 inv. 9 |
+| Decode side: schema dispatch, fail-loud, fixed-point | `docs/specs/binance.md` |
+| Wire shapes, SBE header, templateIds, body offsets, `serverShutdown` | `docs/fork-knowledge/data-shapes.md` §Binance |
+| Decoder per kind | `docs/specs/event-schema.md` §7 (table) |
+| Fixture layout, frozen schema XML | `docs/specs/fixtures.md` §Layout |
+| Proxy precedence, dev vs prod egress | `docs/operations.md` §7 |
+| Overlap-reconnect vs process restart | `docs/operations.md` §8 |
+| Parquet output per kind | `docs/architecture.md` §4.4 |
+| Claiming a stream is unavailable | `docs/discipline.md` rule 46 |
 
-## Schema versioning
-SBE schemas are XML; the deployed BNBUSDT spot schema is **`spot_1_0.xml`**
-(schemaId=1, version=0 — confirmed live — data-shapes.md ## Binance). The
-8-byte LE frame header carries `[blockLength][templateId][schemaId][version]`
-(@depth20 templateId=10002, @trade=10000). Store the **exact schema XML in
-`testdata/fixtures/binance/sbe/schema/`**. On a schema-id/version change, emit a
-versioned record/log line and alert; Binance retires deprecated schemas on a
-~6-month cycle.
+**Commands that answer questions**
+- `make test-offline` (Makefile) — the suite with Binance down, on frozen fixtures.
+- `go test -tags binance_live ./internal/binance` (`internal/binance/live_smoke_test.go`) — NETWORK: live raw frames through the configured egress.
+- `make fixture-capture` (Makefile) — NETWORK, prod host, operator-approved; the `blockchain-kit:fixture-capturer` agent's job.
 
-## Dev vs prod
-Dev egresses via SOCKS5, prod direct; the proxy literal, its precedence, and the
-Binance-only rule are `environment-detection` §Resolution order (highest wins) and
-§Rules. The bot consumes `@depth20` + `@aggTrade`; raw `@trade` and REST snapshots are
-recorder-only. No `bookTicker` (price derives from the depth20 top level).
-
-## Perp / USD-M futures (M4 activation, M5a decode)
-`collector-binance-perp` is active from M4 (kinds 8/9/10; `EventKind`
-`BinancePerpDepth20`/`Trade`/`PremiumIndex`). Unlike spot, futures market data is
-**bare JSON, not SBE** — `fstream.binance.com` `/ws/<symbol>@depth20@100ms` and
-`/ws/<symbol>@trade` (single-path connections, same convention as spot
-`@aggTrade`: no `{stream,data}` wrapper); `premiumIndex` (mark price + funding)
-is REST-only at `fapi.binance.com` `/fapi/v1/premiumIndex` — an
-outcome-acceptable archival source for mark+funding, kept. Perp WS streams are
-**routed** (ADR 0027): `@depth20`/`@trade`/`bookTicker` on `/public`,
-`forceOrder`/`markPrice`/`aggTrade` on `/market`; the legacy unrouted
-`/ws` serves `/public` only. `forceOrder`
-(liquidations) is recovered via `/market/ws/!forceOrder@arr` (kind 11,
-record-only) and, being symbol-independent, records under its OWN source
-`binance-perp/_allmarket` (`feedid.CollectorBinancePerpAllMarket`) via a second
-in-process recorder that opts out of the all-feeds-down backstop — one owner
-instance per host (`-allmarket-forceorder`, default true; ADR 0073, #87);
-`markPrice` info is archived via `premiumIndex` REST; futures
-`aggTrade` is neither collected nor derived (data-shapes.md perp-routing note). Read-time decoders (`internal/parsers/binance/perp*.go`:
-`ParsePerpDepth20`/`ParsePerpTrade`/`ParsePerpPremiumIndex`) were built at M5a
-(ADR 0021) — pure JSON→E8 decode, fixture-round-tripped; `cmd/etl`'s Parquet
-writer does not yet have structured tables for these kinds (still the generic
-`events.parquet` fallback — a separate, unstarted ETL workstream).
+**What only this skill says**
+- Take a wire shape from `docs/fork-knowledge/data-shapes.md` or a frozen fixture, not from Binance's public docs or memory alone.
+- Endpoint and proxy resolution: load `blockchain-kit:environment-detection`.
+- Before writing that Binance withholds or lacks a stream, run the rule-46 check (docs and a probe); ADR 0027 records what a one-sided probe cost.

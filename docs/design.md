@@ -62,8 +62,8 @@ Consequences:
 
 | File | Content |
 |---|---|
-| `CLAUDE.md` | Project facts only: what the project is, the commands table, architecture at a glance, the non-negotiable invariants, the environment rule, the standard of evidence, the operator authorizations (merge without asking, privileged prod commands, where to ask), the map of docs. Target at most 150 lines. No routing, tiers, hooks, rotation or pipeline text. One line names blockchain-kit as the steering home. |
-| `.claude/settings.json` | `extraKnownMarketplaces` (the kit's git repo), `enabledPlugins` (the kit on; nothing else listed), `worktree.baseRef: "head"` (§7 depends on it: the default `fresh` starts a lane at `origin/main` — measured), `env` (`GOPRIVATE` and `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`), `enabledMcpjsonServers`, and a `permissions.allow` list trimmed to what remains. No `hooks`, `statusLine`, `outputStyle` or `skillOverrides`. Keys in the order the plugin CLI writes them — `$schema`, `env`, `enabledMcpjsonServers`, `worktree`, `enabledPlugins`, `extraKnownMarketplaces` as observed, with the plugin keys last — so a per-clone install leaves no diff (measured: `plugin install --scope project` rewrites the file). |
+| `CLAUDE.md` | Project facts only: what the project is, the commands table, architecture at a glance, the non-negotiable invariants, the environment rule, the standard of evidence, the operator authorizations (merge without asking, privileged prod commands, where to ask), the map of docs. No line cap (operator, 2026-10-03): a passage stays if a session needs it on every turn, and goes if it is redundant, verbose commentary, history, or belongs elsewhere. No routing, tiers, hooks, rotation or pipeline text. One line names blockchain-kit as the steering home. |
+| `.claude/settings.json` | `extraKnownMarketplaces` (the kit's git repo, as `{"source":"github","repo":"mrinaldhillon/blockchain-kit"}`), `enabledPlugins` (the kit on; nothing else listed), `worktree.baseRef: "head"` (§7 depends on it: the default `fresh` starts a lane at `origin/main` — measured), `env` (`GOPRIVATE` and `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`), `enabledMcpjsonServers`, and a `permissions.allow` list trimmed to what remains. No `hooks`, `statusLine`, `outputStyle` or `skillOverrides`. Keys in the order the plugin CLI writes them — `$schema`, `env`, `enabledMcpjsonServers`, `worktree`, `enabledPlugins`, `extraKnownMarketplaces` as observed, with the plugin keys last — so a per-clone install leaves no diff (measured: `plugin install --scope project` rewrites the file). |
 | `.mcp.json` | The pyright server loses its `-p .claude/pyrightconfig.json` argument: with the overlay gone the server exits on it (measured). Otherwise unchanged. The `gopls` and `pyright` servers start the repo's pinned binaries under `dev-setup/`, and the key `gopls` keeps the tool names `mcp__gopls__*` that the kit's agents are granted. |
 | `.gitignore` | Gains `.claude/worktrees/`: lane worktrees live there and the rule that ignores them today is `.claude/.gitignore`, which the cut deletes (measured). |
 | `docs/decisions/` | One new engineering ADR: this repo carries no steering layer; its home is blockchain-kit. |
@@ -145,7 +145,9 @@ Each hook has a kill switch in the `BLOCKCHAIN_KIT_*` family and reads project s
   windows measured. `blockchain-kit-update` runs `claude plugin marketplace update` then
   `claude plugin update blockchain-kit@blockchain-kit --scope project`, and the next session
   has the commit (measured). The marketplace entry keeps the relative source `./`.
-- Kit CI: `tests/run`, `claude plugin validate .`, shellcheck and ruff, on pull requests.
+- No kit CI and no required check: a change to steering carries no gate (operator,
+  2026-10-09). `tests/run`, `claude plugin validate .`, shellcheck and ruff are local tools,
+  run by hand when a change touches what they cover.
 
 ## 6. Disposition of pb's current layer
 
@@ -294,13 +296,15 @@ Rules that follow:
 - **A fact has one home, so a change has one edit.** The mirrors go with the layer: roster
   tables, index files, the skill manifest, tracking rows, the lockstep files and the lints
   that held them in agreement.
-- **The selector is the only judge of what CI runs.** A lane runs when the diff touches a
-  file the lane reads. A prose diff selecting any lane is a selector defect to fix in pb.
-  The prose row above is the target, not today's behaviour (measured at `01f5af59`): only the
-  ceremony-free roots (`docs/decisions/`, `docs/reports/`, `docs/reviews/`, `docs/design/`,
-  `dev-setup/decisions/`) select nothing; any other `docs/*.md` selects `python-floor-check
-  boundary-lint citation-lint layering-lint shelltest` and four selector harnesses, and
-  `CLAUDE.md` or `README.md` the first four lanes. The migration plan's C6 closes the gap.
+- **The selector is the only judge of what CI runs.** A prose-only PR gets no CI run
+  (operator, 2026-10-04): the selector gives `docs/**/*.md` and root `*.md` no lane, the
+  classifier calls such a diff `none`, and `land` posts `ci` without a run, as it does for
+  the record roots (`docs/decisions/`, `docs/reports/`, `docs/reviews/`, `docs/design/`,
+  `dev-setup/decisions/`). Three doc paths are lane inputs, not prose, and keep their
+  lanes: `docs/fork-knowledge/` and `docs/data-deprecations/` (Go tests read them) and
+  `docs/architecture.md` (`boundary-lint` reads its package table). The cost is accepted:
+  `citation-lint` and `layering-lint` do read prose, so a hit a prose-only PR introduces
+  shows at the next non-prose PR or the weekly all-lanes run, not at its own merge.
 - **Nothing is gated twice.** There is no local composite before the GitHub run and no
   per-slice gate before the merge gate.
 
@@ -319,6 +323,10 @@ plan, §Phase 0 results) unless marked **docs**.
   has the kit from its first moment is inferred from the cache being in place, not measured. A
   **headless** run loads nothing until `claude plugin install blockchain-kit@blockchain-kit
   --scope project` has run once in that clone.
+- That interactive reconcile writes `known_marketplaces.json` but no `installed_plugins.json`
+  row: `claude plugin list` shows nothing until the per-clone install runs.
+- `advisor` is in every kit agent's and workflow lane's tool roster, though no frontmatter
+  grants it.
 - `claude plugin uninstall --scope project` and `claude plugin marketplace remove` empty
   `enabledPlugins` and `extraKnownMarketplaces` in the clone's tracked `settings.json`.
 - A private marketplace is fetched with the user's git credentials. (docs — the probes used
@@ -350,7 +358,7 @@ fall says the workflow is not carrying the load, whatever else improved.
 - The hot-path rule no longer loads on a matching file read. It loads by routing and by the
   workflow's `packages` rule, and `owed.read` puts those diffs in front of the main loop.
 - Retired guards leave gaps that were closed by mechanism and are now closed by structure
-  (worktrees, the script's fixed tiers) or not at all. §6's return rule applies. The three
+  (worktrees, the script's fixed tiers) or not at all. §6's return rule applies. The four
   that matter most:
   - Lanes commit, and `agent_write_guard` is gone. Only the lane's instructions stop it from
     a `git push` or a `reset --hard`. Branch protection still holds `main`.
@@ -358,6 +366,13 @@ fall says the workflow is not carrying the load, whatever else improved.
     workflow script and the agent file say; a hand dispatch from the main loop is unchecked.
   - Nothing denies a commit on the fork's trunk branches from a pb session except the
     fork's own `.githooks/`, where they are armed.
+  - `dirty_tree_guard` and `dispatch_guard`'s tree lease are gone. A workflow lane gets its
+    own worktree and the Integrate stage refuses a dirty tree, but a hand dispatch into the
+    session's tree is held only by `working-here`'s "commit before you dispatch": nothing
+    stops one from sweeping uncommitted edits into its commit, or two from editing one tree
+    at once. Whether pb's guards ever caught a real collision was not measured before the
+    cut (their deny logs are in the clone's `.claude/state/`); the lease misfired once
+    (pb #932, a phantom lease after a denied dispatch).
 
 ## 12. Defaults taken, the operator's to reverse
 

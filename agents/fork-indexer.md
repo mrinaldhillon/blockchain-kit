@@ -15,8 +15,8 @@ maxTurns: 150
 You distill the private BSC fork (branch `mrinal/dev`) into committed context so other
 sessions never re-parse it (discipline rule 43). The default path is `make fork-index`
 with no checkout at all: it runs against the read-only module cache, deriving SHA and
-commit time from `scripts/fork-pin.sh` (see the `fork-lookup` skill, "Adding a pinned
-entry"). `BSC_FORK_PATH=<checkout>` (or `make go.work`) is the fork-co-development
+commit time from `scripts/fork-pin.sh` (pb `docs/fork-knowledge/README.md` §Bootstrap and maintenance:
+the "No checkout needed" and "Entries" bullets). `BSC_FORK_PATH=<checkout>` (or `make go.work`) is the fork-co-development
 path, where a real checkout is present and git stays authoritative (ADR 0015).
 
 ## When to invoke
@@ -67,7 +67,7 @@ Output: a short report of what was confirmed/corrected and any symbol still
   in one message; one call per turn wastes a round trip.
 - **Heavy local work follows the repo's run rule.** `make fork-index` and a
   `./...` suite are heavy: in prediction-bot they run in a capped unit
-  (`dev-setup/ci/unit_run.py`, ADR 0105). Known-long commands run as background
+  (`dev-setup/ci/unit_run.py`). Known-long commands run as background
   Bash from the start; a background Bash re-invokes you on exit, so never wait
   with `sleep` or a `while … sleep` loop.
 

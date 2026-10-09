@@ -25,9 +25,8 @@ Your brief names its Files, its contract, and the Report you owe; a brief
 missing one of the three is a hand-back, not a guess.
 
 **You build only in a snapshot the brief names by path** — a detached worktree at
-the reviewed SHA under `$TMPDIR`, cut and removed by the main loop (in
-prediction-bot through `.claude/tools/snapshot.py cut`, ADR 0077; elsewhere
-`git worktree add --detach`). Prefix every Bash call with `cd <snapshot> &&`,
+the reviewed SHA under `$TMPDIR`, cut and removed by the main loop
+(`git worktree add --detach <path> <sha>`, then `git worktree remove <path>`). Prefix every Bash call with `cd <snapshot> &&`,
 since your shell cwd resets per call. A brief that carries no snapshot path is a
 hand-back: report `BLOCKED: no snapshot` and run nothing.
 
@@ -83,6 +82,6 @@ run, fall back to `git grep` + Read, and mark the result degraded — it misses 
 reference through an import alias or a re-export, and an interface satisfied
 elsewhere. Every report ends with `mcp: N calls (<tool names, deduped>)`.
 
-**Inspection only — an allowlist.** Run only `git diff|log|show|status|rev-parse`, `gh pr view|diff|checks`, `rg`/`git grep`/`find`/`jq`, `ls`, `bsc-fork`, and the gates (`go build|vet|test`, `make test-offline|replay-parity|fork-knowledge-check`) only inside a snapshot the brief names by path — never in the dispatcher's tree. No git write verb, file edit, formatter, or writing `gh`, and no tree write: no `go mod tidy|vendor`, `go get|work|generate`, a `-w` formatter, `--fix`, `sed -i`/`perl -i`, an output operand, or a redirect or `tee` into the tree (ADR 0077).
+**Inspection only — an allowlist.** Run only `git diff|log|show|status|rev-parse`, `gh pr view|diff|checks`, `rg`/`git grep`/`find`/`jq`, `ls`, `bsc-fork`, and the gates (`go build|vet|test`, `make test-offline|replay-parity|fork-knowledge-check`) only inside a snapshot the brief names by path — never in the dispatcher's tree. No git write verb, file edit, formatter, or writing `gh`, and no tree write: no `go mod tidy|vendor`, `go get|work|generate`, a `-w` formatter, `--fix`, `sed -i`/`perl -i`, an output operand, or a redirect or `tee` into the tree.
 
 **Bash is cost-bounded:** read what the task needs, `file:line` not file dumps; no raw logs or whole-file pastes into your context or the report.

@@ -114,10 +114,11 @@ and never moves the pin. The index is the repo's (`make fork-index`, the `fork-i
 ## Checks
 
 `tests/run` is the hermetic suite: no network, no Go toolchain, no `claude`; `node` for the
-workflow tests, which are skipped without it. A pull request also runs `claude plugin validate
-.`, shellcheck and ruff. What Claude Code does with a hook's answer, whether a skill or an
-agent loads, and what an agent does with a prompt are live runs; the ones made are in
-`docs/migration-plan.md` §Phase 0 results.
+workflow tests, which are skipped without it. The kit has no CI and no required check: a
+change to steering carries no gate (operator, 2026-10-09). Run `tests/run`, `claude plugin
+validate .`, shellcheck and ruff by hand when a change touches what they cover. What Claude
+Code does with a hook's answer, whether a skill or an agent loads, and what an agent does
+with a prompt are live runs; the ones made are in `docs/migration-plan.md` §Phase 0 results.
 
 ## Sources
 
