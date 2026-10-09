@@ -356,7 +356,7 @@ fall says the workflow is not carrying the load, whatever else improved.
 - The hot-path rule no longer loads on a matching file read. It loads by routing and by the
   workflow's `packages` rule, and `owed.read` puts those diffs in front of the main loop.
 - Retired guards leave gaps that were closed by mechanism and are now closed by structure
-  (worktrees, the script's fixed tiers) or not at all. §6's return rule applies. The three
+  (worktrees, the script's fixed tiers) or not at all. §6's return rule applies. The four
   that matter most:
   - Lanes commit, and `agent_write_guard` is gone. Only the lane's instructions stop it from
     a `git push` or a `reset --hard`. Branch protection still holds `main`.
@@ -364,6 +364,13 @@ fall says the workflow is not carrying the load, whatever else improved.
     workflow script and the agent file say; a hand dispatch from the main loop is unchecked.
   - Nothing denies a commit on the fork's trunk branches from a pb session except the
     fork's own `.githooks/`, where they are armed.
+  - `dirty_tree_guard` and `dispatch_guard`'s tree lease are gone. A workflow lane gets its
+    own worktree and the Integrate stage refuses a dirty tree, but a hand dispatch into the
+    session's tree is held only by `working-here`'s "commit before you dispatch": nothing
+    stops one from sweeping uncommitted edits into its commit, or two from editing one tree
+    at once. Whether pb's guards ever caught a real collision was not measured before the
+    cut (their deny logs are in the clone's `.claude/state/`); the lease misfired once
+    (pb #932, a phantom lease after a denied dispatch).
 
 ## 12. Defaults taken, the operator's to reverse
 
