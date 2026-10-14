@@ -1,11 +1,9 @@
 ---
 name: fork-lookup
-description: >-
-  Use to look up a BSC fork symbol (signature, file:line, verified flag) from the
-  committed machine index instead of re-parsing the fork, and to check whether the
-  fork-knowledge artifacts are stale. Trigger before reading the fork tree for any
-  node-API symbol, and before adding or regenerating an index entry.
+description: "Fork symbols from the committed index (bsc-fork show, search), and its staleness."
 ---
+
+**When to load:** Use to look up a BSC fork symbol (signature, file:line, verified flag) from the committed machine index instead of re-parsing the fork, and to check whether the fork-knowledge artifacts are stale. Trigger before reading the fork tree for any node-API symbol, and before adding or regenerating an index entry.
 
 # Fork symbol lookup (parse-once, rule 43)
 

@@ -1,13 +1,9 @@
 ---
 name: contract-abi
-description: >-
-  Use when decoding or encoding on-chain data for the PancakeSwap Prediction V2
-  contract, the Chainlink BNB/USD and USDT/USD aggregators, or PancakeSwap
-  router calldata — event logs, calldata, packing a bet, the embedded ABI in
-  `internal/parsers` and the pack ABI in `internal/executor` — or converting a
-  numeric on-chain value for state or strategy. Trigger before abigen, a bound
-  contract, or any `getLogs`/`FilterLogs` call.
+description: "Prediction V2, Chainlink and router ABI: decoding logs and calldata, packing a bet, on-chain numbers."
 ---
+
+**When to load:** Use when decoding or encoding on-chain data for the PancakeSwap Prediction V2 contract, the Chainlink BNB/USD and USDT/USD aggregators, or PancakeSwap router calldata — event logs, calldata, packing a bet, the embedded ABI in `internal/parsers` and the pack ABI in `internal/executor` — or converting a numeric on-chain value for state or strategy. Trigger before abigen, a bound contract, or any `getLogs`/`FilterLogs` call.
 
 # Contract ABI
 

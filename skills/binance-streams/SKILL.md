@@ -1,13 +1,9 @@
 ---
 name: binance-streams
-description: >-
-  Use when capturing, framing, or decoding Binance market data — SBE @depth20 /
-  raw @trade, JSON @aggTrade, REST depth snapshots, USD-M perp streams and
-  forceOrder, the SBE schema, the Ed25519 key, the 24h connection limit /
-  overlap-reconnect, or the dev SOCKS5 proxy. Trigger for internal/binance,
-  collector-binance-spot and collector-binance-perp, and the binance parsers
-  (internal/parsers/binance).
+description: "Binance market data in prediction-bot: SBE and JSON streams, depth snapshots, reconnects, the proxy."
 ---
+
+**When to load:** Use when capturing, framing, or decoding Binance market data — SBE @depth20 / raw @trade, JSON @aggTrade, REST depth snapshots, USD-M perp streams and forceOrder, the SBE schema, the Ed25519 key, the 24h connection limit / overlap-reconnect, or the dev SOCKS5 proxy. Trigger for internal/binance, collector-binance-spot and collector-binance-perp, and the binance parsers (internal/parsers/binance).
 
 # Binance streams
 

@@ -50,6 +50,23 @@ read by the main loop and `make replay-parity` when owed.
 | `tests/run` | the hermetic suite: `bin/`, `lib/`, the hooks, and the workflow script against scripted agents |
 | `.claude-plugin/` | plugin and single-plugin marketplace manifests. No `version`: the commit SHA is the version |
 
+## Skill modes
+
+Claude Code's `skillOverrides` setting does not reach plugin skills ("Plugin skills are not
+affected by `skillOverrides`", Claude Code docs, Skills), so a `blockchain-kit:*` key there does
+nothing. A kit skill's mode is its own frontmatter, changed in a kit commit and delivered by
+`blockchain-kit-update`:
+
+| Mode | Frontmatter |
+|---|---|
+| on | `description:` the full when-to-load text |
+| name-only | `description:` one line naming what the skill covers. The routing table the session-start hook injects says when to load it; the full text is the body's **When to load** line |
+| user-invocable-only | `disable-model-invocation: true`: hidden from the model, `/blockchain-kit:<name>` still runs. Never on a skill an agent preloads (`skills:` in `agents/`) or a workflow unit names: the flag blocks both |
+| off | the skill deleted |
+
+Every skill is name-only except `upstream-rebase`, which is user-invocable-only. A mode holds for
+every repository: each project's install of one kit commit shares one cache directory.
+
 ## Enabling it in a project
 
 prediction-bot commits the enablement in `.claude/settings.json`: `extraKnownMarketplaces` names

@@ -1,6 +1,7 @@
 ---
 name: upstream-rebase
 description: Use when adopting a new upstream bnb-chain/bsc release tag as the bsc-geth fork's base — moving mrinal/master to the tag and rebuilding mrinal/dev's feature-level history on top of it. Covers the pre-rebase survey, the oracle-then-replay method, the differential proof, the rebase-specific gates, the guarded ref moves, and the bot's pin move afterwards. Not for ordinary fork feature work, and not for the production cutover.
+disable-model-invocation: true
 ---
 
 # Upstream rebase — adopting a new base tag

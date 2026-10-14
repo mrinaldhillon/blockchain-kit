@@ -1,7 +1,9 @@
 ---
 name: fork-deploy
-description: Use before changing anything under deploy/production/ in the bsc-geth fork checkout, or anything that affects the node's config.toml, its systemd unit's ExecStart, the host bundle's MANIFEST, or which repo installs a path on the production host. Covers the offline gate, the two config checkers, one-writer-per-path across the fork's and the bot's manifests, and the keys and flags never to set.
+description: "The fork's deploy/production tree: config.toml, the geth unit, the host manifests."
 ---
+
+**When to load:** Use before changing anything under deploy/production/ in the bsc-geth fork checkout, or anything that affects the node's config.toml, its systemd unit's ExecStart, the host bundle's MANIFEST, or which repo installs a path on the production host. Covers the offline gate, the two config checkers, one-writer-per-path across the fork's and the bot's manifests, and the keys and flags never to set.
 
 # The fork's production deploy bundle
 

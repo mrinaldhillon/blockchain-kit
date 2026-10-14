@@ -1,7 +1,9 @@
 ---
 name: fork-development
-description: Use when changing the bsc-geth fork itself from a prediction-bot session — editing, building, testing or committing in the fork checkout, moving the go.mod fork pin, or deciding whether a change belongs in the fork or in the bot. Covers the three trees (pin, checkout, go.work), the edit-to-pin loop, the fork's commands, branches, architecture and commit conventions.
+description: "Changing bsc-geth itself: the pin, the checkout, go.work, the edit-to-pin loop."
 ---
+
+**When to load:** Use when changing the bsc-geth fork itself from a prediction-bot session — editing, building, testing or committing in the fork checkout, moving the go.mod fork pin, or deciding whether a change belongs in the fork or in the bot. Covers the three trees (pin, checkout, go.work), the edit-to-pin loop, the fork's commands, branches, architecture and commit conventions.
 
 # Developing the fork from its client
 

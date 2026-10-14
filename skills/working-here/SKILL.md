@@ -1,7 +1,9 @@
 ---
 name: working-here
-description: "How work moves in prediction-bot and the bsc-geth fork from a Claude session: explore and plan in the session, persist open work as issues, cut briefed units, run the implement workflow, adjudicate its result, land with dev-setup/ci/land. Load before a multi-step change, before cutting units, and before landing."
+description: "How work moves: plan, issues, units, the implement workflow, landing."
 ---
+
+**When to load:** How work moves in prediction-bot and the bsc-geth fork from a Claude session: explore and plan in the session, persist open work as issues, cut briefed units, run the implement workflow, adjudicate its result, land with dev-setup/ci/land. Load before a multi-step change, before cutting units, and before landing.
 
 # Working here
 

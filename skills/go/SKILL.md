@@ -1,12 +1,9 @@
 ---
 name: go
-description: >-
-  Use before writing, editing, reviewing or deleting Go: symbol lookup through
-  gopls instead of grep, what a green build, vet, cached test or clean -race run
-  does and does not prove, map order, injected clocks, atomic publish, error
-  wrapping, and the language-version rule. Trigger on any .go file, go.mod, or a
-  rename or unused-code removal in Go.
+description: "Go authoring rules for prediction-bot and the bsc-geth fork."
 ---
+
+**When to load:** Use before writing, editing, reviewing or deleting Go: symbol lookup through gopls instead of grep, what a green build, vet, cached test or clean -race run does and does not prove, map order, injected clocks, atomic publish, error wrapping, and the language-version rule. Trigger on any .go file, go.mod, or a rename or unused-code removal in Go.
 
 # Go authoring — conditional bindings
 

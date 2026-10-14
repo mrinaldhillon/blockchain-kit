@@ -1,12 +1,9 @@
 ---
 name: environment-detection
-description: >-
-  Use when wiring endpoints, choosing IPC vs WebSocket for geth (the node),
-  configuring the Binance SOCKS5 proxy, adding a binary that reads PB_ENV, or
-  writing tests that must run offline. Trigger for internal/envdetect, transport
-  selection in nodeapi/binance, a cmd/* main's endpoint or proxy flags, and
-  CI/test setup.
+description: "Endpoints, IPC or WebSocket, PB_ENV, the SOCKS5 proxy, tests that run offline."
 ---
+
+**When to load:** Use when wiring endpoints, choosing IPC vs WebSocket for geth (the node), configuring the Binance SOCKS5 proxy, adding a binary that reads PB_ENV, or writing tests that must run offline. Trigger for internal/envdetect, transport selection in nodeapi/binance, a cmd/* main's endpoint or proxy flags, and CI/test setup.
 
 # Environment detection
 
