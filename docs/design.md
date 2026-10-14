@@ -3,7 +3,8 @@
 Date 2026-10-01. Sources read: prediction-bot (pb) `01f5af59`, blockchain-kit `6796a58`,
 bsc-geth `mrinal/dev` in `../bsc`. Evidence class is named per claim: **measured** (a command
 run on those trees), **docs** (Claude Code docs, read 2026-10-01, not yet observed live) or
-**decided** (the operator's ruling in the 2026-10-01 session).
+**decided** (the operator's ruling in the 2026-10-01 session, or a later ruling where its date
+is given).
 
 ## 1. Decision
 
@@ -25,8 +26,16 @@ one decision record. A change of design is a PR to this file, with no ADR ceremo
 - **The main loop orchestrates instead of thinking** (measured: 28 pb sessions, 2,704
   main-loop turns, 14 days). Dispatching, bookkeeping writes, git/gh legwork and gate runs
   are 40% of turns and 53% of output tokens. Plans, specs, ADRs and docs are 2% of turns.
-- **Fork changes are bot changes** (decided). bsc-geth is pinned by pb as its go-ethereum;
-  most fork work needs bot work. One session rooted in pb develops both.
+- **Fork changes are mostly bot changes, and the fork is developed three ways** (decided,
+  2026-10-14). bsc-geth is pinned by pb as its go-ethereum; most fork work needs bot work.
+  (S1) A session rooted in a bsc-geth clone does node-only work and lands by a push to
+  `mrinal/dev`, with no CI and no `land`. (S2) A pb session edits the clone `BSC_FORK_PATH`
+  names. (S3) A pb change that needs a fork change is S2 twice in one pb session: the fork
+  run and its push, the pin move, then the pb run; not a third mechanism, and no second
+  session. One clone per open session: a pb session's `BSC_FORK_PATH` never names a clone
+  another session has open. `mrinal/master` is not touched: everything lands on `mrinal/dev`,
+  which pb pins (decided, 2026-10-14). This replaces the 2026-10-01 "one session rooted in
+  pb develops both".
 - **pb is built to shed the overlay** (measured). `dev-setup/dev-setup.md` §Layout classes
   `.claude/` as an overlay; the root `Makefile`, `dev-setup/ci` and `ci.yml` do not name it.
   The one reverse dependency is the merge step (§4.3).
@@ -46,9 +55,9 @@ Consequences:
 
 - A kit skill is a **router**: when to load, which repo doc holds the facts, which command
   answers the question. It does not carry a copy of the facts. `fork-development`'s
-  `references/features.md` and `upstream-rebase`'s `references/landmines.md` are copies today
-  and go back to bsc-geth `docs/`; the pb domain skills keep only what is not already in pb
-  `docs/`.
+  `references/features.md` and `upstream-rebase`'s `references/landmines.md` were copies; they
+  are pointers to bsc-geth `docs/fork-features.md` and `docs/upstream-rebase-landmines.md`
+  since 2026-10-14. The pb domain skills keep only what is not already in pb `docs/`.
 - A guard that fires only inside Claude Code never protected against a human. The
   main-branch guard is already `dev-setup/githooks/reference-transaction` plus branch
   protection (measured), so pb's `main_guard.py` hook is not carried.
@@ -73,10 +82,22 @@ Everything else under `.claude/` is deleted, with `.github/workflows/steering.ym
 
 ### 4.2 bsc-geth
 
-Nothing: no `CLAUDE.md`, no `.claude/`, no `.mcp.json`. `docs/`, `build/auditext`,
-`make audit-ext`, `deploy/` and `.githooks/` stay; they are the fork's product and its gates.
-The steering-only commits are dropped from the patch stack at the next upstream rebase. That
-is a rewrite of a pushed branch and runs only on the operator's explicit instruction.
+bsc-geth keeps pb's shape (decided, 2026-10-09; confirmed 2026-10-14). This supersedes the
+2026-10-01 ruling that bsc-geth keeps nothing: a session may be rooted in a bsc-geth clone
+(§2), and it gets the same kit steering as pb.
+
+| File | Content |
+|---|---|
+| `CLAUDE.md` | Project facts only, cut by kind as pb's was. The fork's feature inventory moves to `docs/fork-features.md`, the next rebase's landmines to `docs/upstream-rebase-landmines.md`, and the on-host `cmd/campaign` command line to `cmd/campaign/README.md`. |
+| `.claude/settings.json` | The kit enabled at project scope, as pb's, with `worktree.baseRef: "head"`. Nothing else is tracked under `.claude/`. |
+| `.mcp.json` | Kept; names `gopls`. |
+
+`.githooks/` (armed by `make dev-setup`; `reference-transaction` holds `master` and
+`mrinal/master`), `deploy/`, `build/auditext`, `make audit-ext` and `docs/` stay; they are
+the fork's product and its gates. `unit_run.py`, the capped-unit runner for heavy work on the
+prod host, moves to `build/`. The steering-only commits are dropped from the patch stack at
+the next upstream rebase. That is a rewrite of a pushed branch and runs only on the
+operator's explicit instruction.
 
 ### 4.3 The merge step is engineering
 
@@ -96,10 +117,11 @@ and branch protection on `main` requires `ci` and `steering`, strict, admins inc
 | Skill | Role |
 |---|---|
 | `using-blockchain-kit` | The routing table, injected at session start. |
-| `working-here` (new) | The process, in at most 120 lines: explore, plan, cut units, run `implement`, adjudicate, land. Replaces `orchestration`, `git-workflow`, `milestone-workflow`, `dev-workflow`, `plan-authoring` and the superpowers pipeline. |
+| `working-here` (new) | The process, in about 120 lines for both repositories: explore, plan, cut units, run `implement`, adjudicate, land. Replaces `orchestration`, `git-workflow`, `milestone-workflow`, `dev-workflow`, `plan-authoring` and the superpowers pipeline. |
 | `go` | Go authoring bindings. Unchanged. |
 | `fork-lookup`, `fork-node-api`, `contract-abi`, `binance-streams`, `record-format`, `replay-parity`, `environment-detection`, `hot-path-determinism` | Routers to pb `docs/`. |
-| `fork-development`, `fork-ext-convention`, `fork-deploy`, `upstream-rebase` | Routers to bsc-geth `docs/`, plus the pin-and-checkout loop. |
+| `fork-development`, `fork-ext-convention`, `fork-deploy`, `upstream-rebase` | Routers to bsc-geth `docs/`, for both roots (§2), plus pb's pin-and-checkout loop. |
+| `campaign` (new, 2026-10-14) | Router to the fork's measurement campaign: `cmd/campaign/README.md`, `deploy/production/README.md` §Campaign, `bsc-campaign.timer`. |
 
 ### 5.2 Agents
 
@@ -115,9 +137,9 @@ pb's other eleven agents are not carried (§6).
 
 | Hook | Event | Contract |
 |---|---|---|
-| `blockchain-kit-context` | SessionStart | Routing table; pin and checkout lines; the kit's own installed SHA (a clone left behind runs an old kit silently — §5.5); one environment line (prod host or dev, from pb's `env_banner`); one line when `core.hooksPath` is unset or its `reference-transaction` hook is missing or not executable; one line, with a count and the first three paths, when the project tracks anything under `.claude/` other than `settings.json` (one line per file would be 407 lines in pb before the cut, and the hook's context spills to a file above 10,000 characters). Prints nothing outside a fork client. Never fails a session. |
+| `blockchain-kit-context` | SessionStart | Routing table; pin and checkout lines; the kit's own installed SHA (a clone left behind runs an old kit silently — §5.5); one environment line (prod host or dev, from pb's `env_banner`); one line when `core.hooksPath` is unset or its `reference-transaction` hook is missing or not executable; one line, with a count and the first three paths, when the project tracks anything under `.claude/` other than `settings.json` (one line per file would be 407 lines in pb before the cut, and the hook's context spills to a file above 10,000 characters). Prints in a fork client and in the fork itself (a `go.mod` whose module is `github.com/ethereum/go-ethereum`); there it prints the routing table, the host, git-guard (fix: `make dev-setup`), stray and kit lines, and no pin line. Prints nothing elsewhere. Never fails a session. |
 | `guard-secrets` | PreToolUse, file tools | The node material it guards today, plus pb `guard_secrets.py`'s generic patterns (dotenv family, `*.pem`, `*.key`, `*.p12`, `secrets/`). One hook. Fails closed. |
-| `guard-prod-run` | PreToolUse, Bash | The binary class of pb `run_guard.py`: on the prod host, deny a bare replay, bot or collector run that bypasses `scripts/replay-run.sh`. Fails closed. Protects the recorder log. The command is classified with `shlex` at command position, not with pb's 787-line `cmdclass`; the residuals are in the hook's header. `run_guard.py`'s second class (heavy local work through `unit_run.py`) is not carried: it is a rule about pb's own runner, and if it is wanted it belongs in the `make` targets it names. |
+| `guard-prod-run` | PreToolUse, Bash | The binary class of pb `run_guard.py`: on the prod host, deny a bare replay, bot or collector run that bypasses `scripts/replay-run.sh`. Fails closed. Protects the recorder log. The command is classified with `shlex` at command position, not with pb's 787-line `cmdclass`; the residuals are in the hook's header. `run_guard.py`'s second class (heavy local work through `unit_run.py`) is not carried for pb: it is a rule about pb's own runner, and if it is wanted it belongs in the `make` targets it names. For the fork tree it is carried (decided, 2026-10-14), since a bsc-rooted session now runs heavy work beside the production geth: on the prod host, deny an uncapped `make test\|lint\|geth-prod`, a whole-module `go test ./...`, `golangci-lint`, or `go run build/ci.go test\|lint` unless wrapped by `build/unit_run.py`, `systemd-run` or `verifyconstrained`, keyed on the targeted tree (the cwd, or `-C`). |
 | `land-shape` | PreToolUse, Bash | A call that runs pb's `dev-setup/ci/land` runs the one cheap way: a `timeout` wrapper in front of it is removed, it runs in the foreground, and its tool timeout is 1800000 ms (working-here step 6). Rewrites through `updatedInput` and sets no permission decision. Fails open. |
 | `workflow-tiers` | PreToolUse, Workflow | A workflow script written in the session (`script`, or the file at `scriptPath`; a saved workflow called by `name` carries its own tiers and is not inspected) is denied when an `agent()` call leaves `model` unset, naming the line and the call, so no stage inherits the session's tier by omission (working-here, Tiers and dispatch). The script is scanned as text with its literals and comments blanked, not parsed; an options object the text cannot judge (a spread, a call, an expression) is allowed. Fails open: it guards spend, not data. |
 | `gofmt-on-edit` | PostToolUse | Unchanged. |
@@ -138,7 +160,9 @@ Each hook has a kill switch in the `BLOCKCHAIN_KIT_*` family and reads project s
 
 - `workflows/implement.js`, rewritten to §7; `commands/implement.md` is the user-invoked
   entry, because the Workflow tool runs only on an explicit request.
-- `commands/init.md`: gains the check that the project's `.claude/` holds only `settings.json`.
+- `commands/init.md`: gains the check that the project's `.claude/` holds only `settings.json`,
+  and, in a bsc-geth root, the git-guard check (`core.hooksPath`, `make dev-setup`) in place
+  of the pin and checkout steps.
 - `output-styles/distinguished-engineer.md` with `force-for-plugin: true` (docs), so the
   project sets no `outputStyle`.
 - `plugin.json` drops `version`, so the commit SHA is the version (measured: the install's
@@ -211,7 +235,8 @@ worktrees; one review when the lanes merge; no per-lane reviewer and no refuters
 | `branch` | The run branch all lanes merge into. It exists and is checked out in the session's tree. |
 | `head` | The commit of `branch` every lane starts from. |
 | `gate` | The check command for the merged tree, for example `make test-offline PKG=…`. |
-| `fork` | Optional absolute path of the bsc-geth checkout: the units are fork work. `branch` is then the branch checked out there, and `gate` defaults to `make audit-ext`. |
+| `fork` | Optional absolute path of the bsc-geth checkout: the units are fork work from pb (S2). `branch` is then the branch checked out there, and `gate` defaults to `make audit-ext`. |
+| `project`, `module` | The absolute project root and the `module` line of its `go.mod`, passed on every run: the script cannot read the filesystem. With `module` `github.com/ethereum/go-ethereum` and `fork` unset or equal to `project`, the run is rooted in the fork itself (S1) and is refused until the in-place fork mode below lands. |
 | `tiers` | Optional per-stage model override (`lane`, `integrate`, `gate`, `review`, `fix`). A tier above opus, by name, is refused. `review: "session"` runs the review seat at the session's tier, and is the only stage that accepts it. |
 
 **Stages:**
@@ -257,6 +282,10 @@ hot path or the money path: the main loop reads those diffs itself before landin
   stage, and the run stops at the first lane that dies or hands back, because what it left is
   the next lane's tree. Stage 4's API rule becomes the `Ext` convention and the gate is
   `make audit-ext`.
+- A run rooted in the fork (S1) is refused today; a session there dispatches the implementer
+  per unit. An in-place fork mode is a pending kit PR: parallel worktree lanes in the fork's
+  own repository, `fork-ext-convention` loaded, package-scoped lane gates, the gate
+  `make audit-ext`, and the `Ext` review rule.
 - The script's own decisions are tested without a session: `tests/test_implement.py` answers
   its agents from a scenario. What an agent does with a prompt is the live run.
 - A stage that dies is reported with what it left behind (`stalled`), never as a clean result.
@@ -266,13 +295,17 @@ hot path or the money path: the main loop reads those diffs itself before landin
 The main loop does the intelligent work and nothing repetitive:
 
 1. **Explore and plan** in the session, at the session tier. The plan is the unit list.
-2. **Persist work as issues.** A pb issue body carries the units still to do. No plan file,
-   spec file, ledger or resume file is tracked in either repo. Milestone state stays where pb
-   already keeps it, `docs/project-context.md`.
-3. **Run `/blockchain-kit:implement`** with the units. The run is in the background.
+2. **Persist work as issues.** An issue body, in the repo the work is in, carries the units
+   still to do. No plan file, spec file, ledger or resume file is tracked in either repo.
+   Milestone state stays where each repo already keeps it: pb `docs/project-context.md`,
+   bsc-geth `docs/PROJECT_CONTEXT.md`.
+3. **Run `/blockchain-kit:implement`** with the units. The run is in the background. In a
+   bsc-geth root it is refused until the in-place fork mode lands (§7).
 4. **Adjudicate the result**: hand-backs, conflicts, open findings, the owed reads and the
    parity gate.
-5. **Land** with `dev-setup/ci/land`.
+5. **Land**: in pb with `dev-setup/ci/land`; in bsc-geth, the gate green, by
+   `git push origin mrinal/dev` behind `.githooks/pre-push`, with no CI and no confirmation.
+   `mrinal/master` is not touched (decided, 2026-10-14).
 
 Context is the harness's own compaction. There is no rotation, checkpoint or resume protocol;
 their purpose was to survive the context that hand orchestration consumed.
@@ -290,11 +323,19 @@ class, and the class is read off the diff:
 | Product Go | `cmd/`, `internal/` | one branch | the lanes the selector names | one seat at merge (the workflow's, or one `code-reviewer` dispatch) | none |
 | Guarded Go | record spine, hot path, money path | one branch | the same, plus `make replay-parity` when owed | the same, plus the main loop reads the diff | an ADR only when an invariant, a stored-data contract or a boundary changes |
 
+bsc-geth adds two classes (decided, 2026-10-14; `working-here` carries them): **Fork Go**
+(`*_ext.go` and upstream files under the wiring rule; package-scoped gates in a capped unit on
+the prod host, then `make audit-ext`, and `make lint` before a push; one review seat with the
+`Ext` and landmine angles) and **Host** (`deploy/production/`; `bash
+deploy/production/host/tests/run.sh`, plus `check-config-ext.sh` and `host/geth-preflight.sh`
+before a `config.toml` or `ExecStart` change; the install itself is the operator's).
+
 Rules that follow:
 
 - **One branch per change, whatever it touches.** Code, its docs and its tooling land
   together. No branch is cut per file category.
-- **An ADR records a decision about the product**, in pb `docs/decisions/`. A prose edit, a
+- **An ADR records a decision about the product**, in pb `docs/decisions/` or bsc-geth
+  `docs/adr/`. A prose edit, a
   tooling change and any change to the kit never get one.
 - **A fact has one home, so a change has one edit.** The mirrors go with the layer: roster
   tables, index files, the skill manifest, tracking rows, the lockstep files and the lints
@@ -367,8 +408,10 @@ fall says the workflow is not carrying the load, whatever else improved.
     a `git push` or a `reset --hard`. Branch protection still holds `main`.
   - `dispatch_guard`'s typed-dispatch allowlist is gone. A dispatch's tier is what the
     workflow script and the agent file say; a hand dispatch from the main loop is unchecked.
-  - Nothing denies a commit on the fork's trunk branches from a pb session except the
-    fork's own `.githooks/`, where they are armed.
+  - Nothing denies a commit on the fork's trunk branches, from a pb session or a bsc-geth
+    session, except the fork's own `.githooks/`, where they are armed (`make dev-setup`; the
+    session-start hook reports an unarmed clone). A bsc-geth push lands with no CI and no
+    branch protection: the class's local gate and `.githooks/pre-push` are all that hold it.
   - `dirty_tree_guard` and `dispatch_guard`'s tree lease are gone. A workflow lane gets its
     own worktree and the Integrate stage refuses a dirty tree, but a hand dispatch into the
     session's tree is held only by `working-here`'s "commit before you dispatch": nothing
@@ -386,4 +429,4 @@ fall says the workflow is not carrying the load, whatever else improved.
 | `golang-implementer-lite` | deleted |
 | The steering ADR corpus | left at the pb tag, not copied here |
 | `lockstep_check.py`, `adr.py`, `sweep.py` | retired, not moved to `dev-setup/` |
-| Install scope | project, through pb's committed `settings.json`, plus one `claude plugin install … --scope project` per clone so headless runs load it |
+| Install scope | project, through the committed `settings.json` of pb and of bsc-geth, plus one `claude plugin install … --scope project` per clone so headless runs load it |
