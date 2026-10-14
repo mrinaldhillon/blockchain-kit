@@ -32,8 +32,9 @@ export const meta = {
 //     project: '/abs/path/to/clone', // the session's project root, and
 //     module: 'example.com/bot',     // the module its go.mod names: see below
 //   }
-// The script cannot read the filesystem, so the caller says what the project is.
-// When `module` is github.com/ethereum/go-ethereum the session is rooted in the
+// The script cannot read the filesystem, so the caller says what the project is;
+// hooks/implement-args fills both from the disk when they are absent, and itself
+// denies the call in the fork, so this check is the second line. When `module` is github.com/ethereum/go-ethereum the session is rooted in the
 // bsc-geth fork itself, and a run is refused before any agent starts when `fork` is
 // unset or names `project` (compared as given, trailing slashes dropped, no symlink
 // resolution): in-place fork runs are not supported yet. Without `module` that check
@@ -185,7 +186,7 @@ if (units.length === 0) return refuse('no units', { expected: '{units:[{id, brie
 const bare = (p) => String(p).replace(/\/+$/, '')
 if (projectModule === 'github.com/ethereum/go-ethereum' && (!fork || (project && bare(fork) === bare(project)))) {
   return refuse(
-    'This project is the bsc-geth fork; in-place fork runs are not supported yet (kit PR B). Dispatch ' +
+    'This project is the bsc-geth fork; in-place fork runs are not supported yet (kit #16). Dispatch ' +
       'blockchain-kit:golang-implementer by hand, package-scoped, or run implement from the prediction-bot clone ' +
       'with `fork` set.',
     { project, module: projectModule, fork },
