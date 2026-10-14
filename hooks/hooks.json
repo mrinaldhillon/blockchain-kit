@@ -44,6 +44,11 @@
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/workflow-tiers\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/implement-args\"",
+            "timeout": 5
           }
         ]
       }

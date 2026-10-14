@@ -179,7 +179,7 @@ class Implement(unittest.TestCase):
             self.assertEqual(ran["calls"], [], over)
             error = ran["result"]["error"]
             self.assertTrue(error.startswith("This project is the bsc-geth fork; in-place fork runs are not supported "
-                                             "yet (kit PR B)."), error)
+                                             "yet (kit #16)."), error)
             self.assertIn("blockchain-kit:golang-implementer by hand, package-scoped", error)
             self.assertIn("from the prediction-bot clone with `fork` set", error)
         # the client, naming a fork checkout elsewhere, runs; so does a run that does not say

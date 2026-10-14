@@ -130,7 +130,9 @@ class WorkflowTiersTest(unittest.TestCase):
         self.assertTrue(os.access(HOOK, os.X_OK))
         hooks = json.loads((HOOK.parent / "hooks.json").read_text(encoding="utf-8"))["hooks"]["PreToolUse"]
         cmds = [h["command"] for group in hooks if group.get("matcher") == "Workflow" for h in group["hooks"]]
-        self.assertEqual(cmds, ['"${CLAUDE_PLUGIN_ROOT}/hooks/workflow-tiers"'])
+        self.assertEqual(cmds, ['"${CLAUDE_PLUGIN_ROOT}/hooks/workflow-tiers"',
+                                '"${CLAUDE_PLUGIN_ROOT}/hooks/implement-args"'])
+        self.assertTrue(os.access(HOOK.parent / "implement-args", os.X_OK))
 
 
 if __name__ == "__main__":
