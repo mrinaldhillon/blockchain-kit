@@ -36,14 +36,17 @@ anything here.
    it left. Open findings are fixed, deferred to an issue, or accepted, and you say which.
    `owed.parity`: run `make replay-parity` once. `owed.read`: read those diffs yourself.
 6. **Land in one call**, and nothing after it: `git push -q && dev-setup/ci/land <PR>` as
-   background Bash. A landing takes minutes (CI median 5.8, max 12.1, last 60 runs, 2026-10-14);
-   `land` polls the run itself, and the harness re-invokes you when it exits. Never wrap it in
-   `timeout`, and never wait with `sleep` or a poll loop. `land` waits for the pushed head to
-   reach the PR, runs the lanes the diff selects on it, squash-merges on green, and leaves a clean
-   checkout on `main` at the merge with the branch deleted. The exit code is the verdict: 0 merged,
-   with nothing left to do; 1 red, 3 merged with a cleanup left, 4 refused, each said in the
-   output file's last lines. A red is fixed, committed and sent through the same call. Merging
-   needs no confirmation in prediction-bot; a production deploy is a separate decision and is the
+   foreground Bash at the tool's longest timeout (600000 ms), never wrapped in `timeout`. `land`
+   polls the CI run itself. Most landings end inside that window (CI median 5.8 min, max 12.1,
+   last 60 runs, 2026-10-14), and the verdict is the call's result: no further model request. A
+   longer one is moved to the background by the harness, not killed, and its exit notifies you.
+   Never start it in the background: that costs one more model request, for the "started"
+   result. Never wait with `sleep` or a poll loop. `land` waits for the pushed head to reach the
+   PR, runs the lanes the diff selects on it, squash-merges on green, and leaves a clean checkout
+   on `main` at the merge with the branch deleted. The exit code is the verdict: 0 merged, with
+   nothing left to do; 1 red, 3 merged with a cleanup left, 4 refused, each said in the last
+   lines. A red is fixed, committed and sent through the same call. Merging needs no
+   confirmation in prediction-bot; a production deploy is a separate decision and is the
    operator's.
 
 One unit, or a change too small to brief, skips steps 3 to 5: dispatch
@@ -69,7 +72,9 @@ The class is read off the diff, and the class decides the ceremony.
 - **An ADR records a decision about the product**, in `docs/decisions/`. A prose edit, a tooling
   change and a change to this kit never get one.
 - **Nothing is gated twice.** No local composite before the GitHub run. A known-long command
-  runs as background Bash from the start.
+  runs as foreground Bash at the tool's longest timeout, unless other work runs beside it: past
+  that timeout the harness moves it to the background and notifies on exit, and a background
+  start costs one more model request.
 - **One gate command, one line:** `bk-gate <name> -- <command>` prints
   `gate: <name> rc=<n> t=<s>s out=<path>` and, on red, the last ten lines. Never pipe a gate
   into `tail` or `grep`.
