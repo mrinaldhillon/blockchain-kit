@@ -40,6 +40,7 @@ read by the main loop and `make replay-parity` when owed.
 | `bin/bsc-fork` | `pin`, `show`, `search`, `list`, `check`, `path` |
 | `bin/bk-gate` | `bk-gate [-C DIR] <name> -- <command>`: one verdict line, the last ten lines on red, the command's exit code |
 | `bin/bk-mainloop-share` | what main-loop turns were spent on, by category: the kit's one metric |
+| `bin/bk-statusline` | the status line: the session (model, context, rate limits, cache, cost) and the place (branch, PR, PROD, the fork pin and checkout, the kit's SHA) |
 | `bin/blockchain-kit-context` | the session-start hook: routing table, pin and checkout lines, the kit's SHA, the host, and what is out of place (git guard unarmed, steering files outside the kit) |
 | `bin/blockchain-kit-setup`, `-update` | install and update, `--scope user\|project` |
 | `hooks/guard-secrets` | denies the file tools node identity and account material and the generic secret patterns; fails closed |
@@ -100,6 +101,46 @@ Kill switches: `BLOCKCHAIN_KIT_CONTEXT=0`, `BLOCKCHAIN_KIT_GOFMT=0`,
 **The gopls MCP server is the repo's**, in its `.mcp.json`, never the plugin's: a server a
 plugin ships is named for the plugin, and the agents are granted `mcp__gopls__<tool>`. The key
 must be exactly `gopls`. gopls answers for the fork checkout only while `go.work` is active.
+
+## Status line
+
+A plugin cannot set `statusLine`: its `settings.json` honours only `agent` and
+`subagentStatusLine`. So the user's settings point at the kit's script through the stable
+link, and it moves with each `blockchain-kit-setup` or `-update`:
+
+```json
+"statusLine": {
+  "type": "command",
+  "command": "~/.local/share/blockchain-kit/kit/bin/bk-statusline",
+  "refreshInterval": 10
+}
+```
+
+It prints two lines:
+
+```text
+Opus 5.5·xhigh │ ctx ▓▓▓░░░░░░░ 34% │ 5h 74% ↻04:13 7d 41% │ 340k/1.0M │ cache 93% cold in 4m │ $12.35 │ 1h30m │ bkworking
+prediction-bot main +1 ~2 │ PROD │ PR #903 approved │ pin 485bcb1c2c70 │ fork mrinal/dev +42 │ kit cef76f3
+```
+
+- **The session line:** the model and effort; the context fill, yellow from 50% and red from
+  80%; the 5h and 7d rate-limit windows, with the reset time once a window passes 70%; tokens;
+  the prompt cache, which turns yellow within ten minutes of going cold (a pause then
+  re-caches); cost, duration and the session name.
+- **The place line:** the repo (a link) and branch, with staged `+`, changed `~` and conflicted
+  `!` counts, `↑`/`↓` against the upstream, and a rebase or merge in progress; then the
+  worktree and the PR.
+- **`PROD`:** shown when the geth IPC path is a socket. It is probed on every run, so it
+  never goes stale the way the session-start Host line can.
+- **In prediction-bot:** the pin, with `index STALE` when the index was built elsewhere; the
+  fork checkout against the pin (`+N` past it, `~` when dirty); and `go.work: builds the
+  CHECKOUT`.
+- **`kit <sha>`:** the kit installed for this project, with `→<sha>` when the marketplace
+  has moved past it, which means `blockchain-kit-update` has work to do.
+
+When the terminal is narrow, the line drops duration and cost first, then tokens and the
+cache, and keeps the model to the end. `refreshInterval` keeps the git and host segments current while the session is
+idle. A run takes about 50 ms.
 
 ## Three trees
 

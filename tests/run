@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# tests/run — blockchain-kit's tests: bsc-fork, bk-gate, bk-mainloop-share, setup and
-# update, the session-start hook, the guards, gofmt-on-edit and the implement workflow.
+# tests/run — blockchain-kit's tests: bsc-fork, bk-gate, bk-mainloop-share, bk-statusline,
+# setup and update, the session-start hook, the guards, gofmt-on-edit and the implement
+# workflow.
 #
 # When: before committing a change to any of them, or to lib/. What Claude Code does
 # with a hook's answer, and whether a skill or an agent loads, is a live probe in a
@@ -23,7 +24,7 @@ select=()
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	-k) select+=(-k "${2:?-k needs a pattern}"); shift 2 ;;
-	-h | --help) sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h | --help) sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	*) echo "tests/run: unknown argument: $1 (see --help)" >&2; exit 2 ;;
 	esac
 done

@@ -1,0 +1,429 @@
+#!/usr/bin/env python3
+"""bk-statusline — the Claude Code status line for prediction-bot, the bsc-geth fork and the kit.
+
+A `statusLine` command, set in the user's settings (README §Status line). It reads the
+session JSON Claude Code sends on stdin and prints two lines:
+
+  session   model and effort · context fill · the 5h and 7d rate-limit windows, with the
+            reset time once a window passes 70% · prompt cache · cost · duration · name
+  place     repo and branch: staged, changed and conflicted counts, ahead/behind the
+            upstream, a rebase or merge in progress · the linked worktree · the branch's
+            PR and its review state · PROD when the geth IPC path is a socket (probed on
+            every run, lib/bkhost.py) · in a fork client (prediction-bot): the pin, the
+            index against it, the fork checkout against the pin, go.work · the kit
+            installed for this project, and the marketplace commit when it has moved on
+
+A line wider than $COLUMNS drops its least important segments first. A segment that
+cannot be computed is left out. Outside a git repository the place line shows only the
+directory and the host. Every git query has a one second timeout. The script never fails
+the status line: on bad input it prints the directory and exits 0.
+
+Usage: bk-statusline < status.json     (what Claude Code runs)
+       bk-statusline --help
+Env:   COLUMNS (Claude Code sets it) the width; NO_COLOR, when set, prints no colour.
+       BLOCKCHAIN_KIT_IPC, BSC_FORK_PATH, GOWORK: as for blockchain-kit-context.
+       CLAUDE_CONFIG_DIR: the config home whose installed_plugins.json names the kit.
+Exit:  0 always for a status call · 2 usage.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+KIT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(KIT / "lib"))
+
+PLUGIN = "blockchain-kit@blockchain-kit"
+GIT_TIMEOUT_S = 1.0
+HEX12 = re.compile(r"[0-9a-f]{12}")
+ESCAPES = re.compile(r"\x1b\[[0-9;]*m|\x1b\]8;;[^\x07]*\x07")
+SEP = " │ "
+MARGIN = 4  # Claude Code's own padding around the status row
+
+BOLD, DIM, RED, GREEN, YELLOW, CYAN = "1", "2", "31", "32", "33", "36"
+COLOR = not os.environ.get("NO_COLOR")
+
+
+def paint(text: str, *codes: str) -> str:
+    return f"\x1b[{';'.join(codes)}m{text}\x1b[0m" if COLOR and codes else text
+
+
+def link(text: str, url: str) -> str:
+    """An OSC 8 hyperlink; a terminal without them shows the text."""
+    return f"\x1b]8;;{url}\x07{text}\x1b]8;;\x07" if url else text
+
+
+def visible(text: str) -> int:
+    return len(ESCAPES.sub("", text))
+
+
+def fit(segments: list[tuple[int, str]], columns: int) -> str:
+    """Join (priority, text) segments in order, dropping the highest priority number first
+    until the line fits; the first segment is always kept."""
+    kept = [s for s in segments if s[1]]
+    while len(kept) > 1 and visible(SEP.join(t for _, t in kept)) > columns:
+        drop = max(range(1, len(kept)), key=lambda i: (kept[i][0], i))
+        del kept[drop]
+    return paint(SEP, DIM).join(t for _, t in kept)
+
+
+def git(tree: Path, *args: str) -> str | None:
+    """A read-only git query's stdout, None when it fails or takes too long."""
+    try:
+        done = subprocess.run(["git", "-C", str(tree), *args], capture_output=True, text=True, check=False,
+                              timeout=GIT_TIMEOUT_S, env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"})
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return done.stdout if done.returncode == 0 else None
+
+
+def tokens(n: float) -> str:
+    return f"{n / 1_000_000:.1f}M" if n >= 1_000_000 else f"{round(n / 1000)}k"
+
+
+def level(pct: float, warn: float, alarm: float) -> str:
+    return RED if pct >= alarm else YELLOW if pct >= warn else GREEN
+
+
+def when(epoch: float) -> str:
+    """A reset time: 14:05 within a day, else Thu 14:05."""
+    at = time.localtime(epoch)
+    return time.strftime("%H:%M" if epoch - time.time() < 86_400 else "%a %H:%M", at)
+
+
+def span(ms: float) -> str:
+    minutes = int(ms // 60_000)
+    return f"{minutes // 60}h{minutes % 60:02d}m" if minutes >= 60 else f"{minutes}m"
+
+
+# the session line
+
+
+def model_segment(s: dict) -> str:
+    name = str((s.get("model") or {}).get("display_name") or (s.get("model") or {}).get("id") or "")
+    if not name:
+        return ""
+    text = paint(name, BOLD, CYAN)
+    effort = (s.get("effort") or {}).get("level")
+    if effort:
+        text += paint(f"·{effort}", CYAN)
+    if s.get("fast_mode"):
+        text += paint(" fast", YELLOW)
+    agent = (s.get("agent") or {}).get("name")
+    if agent:
+        text += paint(f" agent:{agent}", DIM)
+    return text
+
+
+def context_segment(s: dict) -> str:
+    pct = (s.get("context_window") or {}).get("used_percentage")
+    if pct is None:
+        return paint("ctx –", DIM)
+    pct = float(pct)
+    filled = min(10, max(0, round(pct / 10)))
+    bar = "▓" * filled + "░" * (10 - filled)
+    return paint(f"ctx {bar} {pct:.0f}%", level(pct, 50, 80))
+
+
+def tokens_segment(s: dict) -> str:
+    window = s.get("context_window") or {}
+    used = window.get("current_usage") or {}
+    size = window.get("context_window_size")
+    held = sum(int(used.get(k) or 0) for k in ("input_tokens", "cache_creation_input_tokens",
+                                                 "cache_read_input_tokens"))
+    if not held or not size:
+        return ""
+    return paint(f"{tokens(held)}/{tokens(size)}", DIM)
+
+
+def limits_segment(s: dict) -> str:
+    limits = s.get("rate_limits") or {}
+    parts = []
+    for key, label in (("five_hour", "5h"), ("seven_day", "7d")):
+        window = limits.get(key) or {}
+        pct = window.get("used_percentage")
+        if pct is None:
+            continue
+        pct = float(pct)
+        text = f"{label} {pct:.0f}%"
+        if pct >= 70 and window.get("resets_at"):
+            text += f" ↻{when(float(window['resets_at']))}"
+        parts.append(paint(text, level(pct, 70, 90)))
+    spend = limits.get("spend_limit") or {}
+    if spend.get("used_percentage") is not None:
+        pct = float(spend["used_percentage"])
+        if spend.get("used_usd") is not None and spend.get("limit_usd") is not None:
+            text = f"spend ${float(spend['used_usd']):.0f}/${float(spend['limit_usd']):.0f}"
+        else:
+            text = f"spend {pct:.0f}%"
+        parts.append(paint(text, level(pct, 70, 90)))
+    return " ".join(parts)
+
+
+def cache_segment(s: dict) -> str:
+    cache = s.get("prompt_cache") or {}
+    if not cache.get("caching_observed"):
+        return ""
+    if not cache.get("warm"):
+        return paint("cache cold", YELLOW)
+    ratio = cache.get("hit_ratio")
+    text = "cache" + (f" {float(ratio) * 100:.0f}%" if ratio is not None else " warm")
+    expires = cache.get("expires_at")
+    if expires:
+        left = float(expires) - time.time()
+        if 0 < left < 600:  # within ten minutes of going cold: a pause now re-caches
+            return paint(f"{text} cold in {max(1, round(left / 60))}m", YELLOW)
+    return paint(text, DIM)
+
+
+def cost_segment(s: dict) -> str:
+    usd = (s.get("cost") or {}).get("total_cost_usd")
+    return paint(f"${float(usd):.2f}", DIM) if usd else ""
+
+
+def duration_segment(s: dict) -> str:
+    ms = (s.get("cost") or {}).get("total_duration_ms")
+    return paint(span(float(ms)), DIM) if ms else ""
+
+
+def name_segment(s: dict) -> str:
+    name = str(s.get("session_name") or "")
+    return paint(name if len(name) <= 24 else name[:23] + "…", DIM) if name else ""
+
+
+def session_line(s: dict, columns: int) -> str:
+    return fit([(0, safe(model_segment, s)), (0, safe(context_segment, s)), (1, safe(limits_segment, s)),
+                (4, safe(tokens_segment, s)), (3, safe(cache_segment, s)), (5, safe(cost_segment, s)),
+                (6, safe(duration_segment, s)), (2, safe(name_segment, s))], columns)
+
+
+# the place line
+
+
+def repo_state(cwd: Path) -> dict | None:
+    out = git(cwd, "status", "--porcelain=v2", "--branch", "--untracked-files=no")
+    if out is None:
+        return None
+    state: dict = {"oid": "", "head": "", "upstream": "", "ahead": 0, "behind": 0, "staged": 0, "changed": 0,
+                   "conflict": 0}
+    for line in out.splitlines():
+        if line.startswith("# branch.oid "):
+            state["oid"] = line.split()[2]
+        elif line.startswith("# branch.head "):
+            state["head"] = line.split(None, 2)[2]
+        elif line.startswith("# branch.upstream "):
+            state["upstream"] = line.split(None, 2)[2]
+        elif line.startswith("# branch.ab "):
+            ahead, behind = line.split()[2:4]
+            state["ahead"], state["behind"] = int(ahead), -int(behind)
+        elif line[:2] in ("1 ", "2 "):
+            staged, changed = line[2], line[3]
+            state["staged"] += staged != "."
+            state["changed"] += changed != "."
+        elif line.startswith("u "):
+            state["conflict"] += 1
+    return state
+
+
+def operation(gitdir: Path) -> str:
+    """The operation a checkout is in the middle of, if any."""
+    for name, label in (("rebase-merge", "REBASE"), ("rebase-apply", "REBASE"), ("MERGE_HEAD", "MERGE"),
+                        ("CHERRY_PICK_HEAD", "CHERRY-PICK"), ("REVERT_HEAD", "REVERT"), ("BISECT_LOG", "BISECT")):
+        if (gitdir / name).exists():
+            return label
+    return ""
+
+
+def repo_segment(s: dict, cwd: Path, top: Path, gitdir: Path) -> str:
+    repo = (s.get("workspace") or {}).get("repo") or {}
+    name = str(repo.get("name") or top.name)
+    url = (f"https://{repo['host']}/{repo['owner']}/{repo['name']}"
+           if repo.get("host") and repo.get("owner") and repo.get("name") else "")
+    text = link(paint(name, BOLD), url)
+    if cwd != top and top in cwd.parents:
+        rel = cwd.relative_to(top).parts
+        text += paint("/" + "/".join(rel if len(rel) <= 2 else ("…", *rel[-2:])), DIM)
+    state = repo_state(cwd)
+    if state is None:
+        return text
+    head = state["head"]
+    branch = paint(state["oid"][:8] if head == "(detached)" else head, GREEN if head != "(detached)" else YELLOW)
+    text += f" {branch}"
+    marks = []
+    if state["staged"]:
+        marks.append(paint(f"+{state['staged']}", GREEN))
+    if state["changed"]:
+        marks.append(paint(f"~{state['changed']}", YELLOW))
+    if state["conflict"]:
+        marks.append(paint(f"!{state['conflict']}", RED, BOLD))
+    if state["ahead"]:
+        marks.append(paint(f"↑{state['ahead']}", CYAN))
+    if state["behind"]:
+        marks.append(paint(f"↓{state['behind']}", YELLOW))
+    doing = operation(gitdir)
+    if doing:
+        marks.append(paint(doing, RED, BOLD))
+    return text + (" " + " ".join(marks) if marks else "")
+
+
+def worktree_segment(s: dict) -> str:
+    name = (s.get("worktree") or {}).get("name") or (s.get("workspace") or {}).get("git_worktree")
+    return paint(f"worktree {name}", YELLOW) if name else ""
+
+
+def pr_segment(s: dict) -> str:
+    pr = s.get("pr") or {}
+    if not pr.get("number"):
+        return ""
+    review = str(pr.get("review_state") or "")
+    colour = {"approved": GREEN, "changes_requested": RED, "draft": DIM, "pending": YELLOW}.get(review, "")
+    text = f"{'MR !' if pr.get('kind') == 'mr' else 'PR #'}{pr['number']}"
+    if review:
+        text += f" {review.replace('_', ' ')}"
+    return link(paint(text, *([colour] if colour else [])), str(pr.get("url") or ""))
+
+
+def host_segment() -> str:
+    import bkhost
+
+    return paint("PROD", BOLD, RED) if bkhost.prod_host() else ""
+
+
+def fork_segments(cwd: Path) -> list[tuple[int, str]]:
+    """In a fork client: the pin and its index, the checkout against the pin, go.work."""
+    import forkpin
+
+    root = forkpin.module_root(cwd)
+    if root is None:
+        return []
+    try:
+        _, pin = forkpin.read_gomod(root / "go.mod")
+    except forkpin.ForkError:
+        return []
+    if pin is None:
+        return []
+    out: list[tuple[int, str]] = []
+    if pin.local:
+        out.append((2, paint("pin: local checkout", YELLOW)))
+    else:
+        try:
+            index: dict | None = forkpin.load_index(forkpin.index_path(root))
+        except forkpin.ForkError:
+            index = None
+        drift = forkpin.drift(pin, index)
+        text = f"pin {pin.sha12 or pin.pseudo}"
+        if drift == "stale":
+            text = paint(f"{text} index STALE", RED, BOLD)
+        elif drift == "unindexed":
+            text = paint(f"{text} no index", YELLOW)
+        else:
+            text = paint(text, DIM)
+        out.append((2, text))
+    tree = forkpin.checkout(root, pin)
+    if tree is not None and forkpin.is_fork(tree):
+        state = forkpin.checkout_state(tree, pin, dirty=True)
+        if state:
+            branch = "detached" if state["branch"] == "HEAD" else str(state["branch"])
+            ahead, behind = state.get("ahead"), state.get("behind")
+            if state.get("at_pin"):
+                where = "@pin"
+            elif ahead is None:
+                where = "pin not in it"
+            else:
+                where = " ".join(p for p in (f"+{ahead}" if ahead else "", f"-{behind}" if behind else "") if p)
+            text = f"fork {branch} {where or '@pin'}" + (" ~" if state.get("dirty") else "")
+            out.append((3, paint(text, DIM)))
+    if forkpin.workspace(root) is not None:
+        out.append((1, paint("go.work: builds the CHECKOUT", YELLOW, BOLD)))
+    return out
+
+
+def kit_segment(project: Path) -> str:
+    """The kit installed for this project (else user scope), and the marketplace's commit
+    when it is ahead: `kit 1d88329→2becf14` means blockchain-kit-update has work to do."""
+    home = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+    try:
+        entries = json.loads((home / "plugins/installed_plugins.json").read_text())["plugins"][PLUGIN]
+    except (OSError, ValueError, KeyError, TypeError):
+        return ""
+    real = os.path.realpath(project)
+    chosen = ([e for e in entries if e.get("scope") == "project" and e.get("projectPath")
+               and os.path.realpath(e["projectPath"]) == real]
+              or [e for e in entries if e.get("scope") == "user"])
+    if not chosen:
+        return ""
+    installed = str(chosen[0].get("gitCommitSha") or chosen[0].get("version") or "")
+    if not installed:
+        return ""
+    text = f"kit {installed[:7]}"
+    head = git(home / "plugins/marketplaces/blockchain-kit", "rev-parse", "HEAD")
+    if head and HEX12.match(head.strip()) and not head.strip().startswith(installed[:12]):
+        return paint(f"{text}→{head.strip()[:7]}", YELLOW)
+    return paint(text, DIM)
+
+
+def place_line(s: dict, columns: int) -> str:
+    cwd = Path(str((s.get("workspace") or {}).get("current_dir") or s.get("cwd") or os.getcwd()))
+    project = Path(str((s.get("workspace") or {}).get("project_dir") or cwd))
+    seen = git(cwd, "rev-parse", "--show-toplevel", "--absolute-git-dir")
+    segments: list[tuple[int, str]] = []
+    if seen and len(seen.splitlines()) == 2:
+        top, gitdir = (Path(p) for p in seen.splitlines())
+        segments.append((0, safe(repo_segment, s, cwd, top, gitdir)))
+        if project == top or top in project.parents:
+            project = top  # an install record names the clone root, not the launch directory
+        else:
+            root = git(project, "rev-parse", "--show-toplevel")
+            project = Path(root.strip()) if root and root.strip() else project
+    else:
+        segments.append((0, paint(str(cwd).replace(str(Path.home()), "~", 1), BOLD)))
+    segments.append((0, safe(host_segment)))
+    segments.append((1, safe(pr_segment, s)))
+    segments.append((1, safe(worktree_segment, s)))
+    try:
+        segments.extend(fork_segments(cwd))
+    except Exception:  # noqa: BLE001, S110 - a segment that fails is left out
+        pass
+    segments.append((4, safe(kit_segment, project)))
+    return fit(segments, columns)
+
+
+def safe(make, *args) -> str:
+    """A segment's text, or nothing when it fails: one segment never drops the line."""
+    try:
+        return make(*args)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def main() -> int:
+    if len(sys.argv) > 1:
+        helping = sys.argv[1] in ("-h", "--help")
+        print((__doc__ or "").strip() if helping else "bk-statusline: takes no arguments (see --help)",
+              file=sys.stdout if helping else sys.stderr)
+        return 0 if helping else 2
+    try:
+        columns = int(os.environ.get("COLUMNS") or 120) - MARGIN
+    except ValueError:
+        columns = 116
+    try:
+        status = json.load(sys.stdin)
+    except ValueError:  # not JSON, or not UTF-8: bad input still gets a status line
+        status = None
+    if not isinstance(status, dict):
+        print(str(Path.cwd()).replace(str(Path.home()), "~", 1))
+        return 0
+    print(session_line(status, columns))
+    print(place_line(status, columns))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
