@@ -171,6 +171,26 @@ class Implement(unittest.TestCase):
         self.assertIsNone(fixer["isolation"])  # the fix is on the run branch, in the session's tree
         self.assertNotIn("stutter", fixer["prompt"])
 
+    def test_a_session_rooted_in_the_fork_is_refused_before_any_agent(self):
+        root = "/src/bsc-geth"
+        node = "github.com/ethereum/go-ethereum"
+        for over in ({}, {"fork": root}, {"fork": root + "/"}):
+            ran = self.run_script(args(project=root, module=node, **over), answers())
+            self.assertEqual(ran["calls"], [], over)
+            error = ran["result"]["error"]
+            self.assertTrue(error.startswith("This project is the bsc-geth fork; in-place fork runs are not supported "
+                                             "yet (kit PR B)."), error)
+            self.assertIn("blockchain-kit:golang-implementer by hand, package-scoped", error)
+            self.assertIn("from the prediction-bot clone with `fork` set", error)
+        # the client, naming a fork checkout elsewhere, runs; so does a run that does not say
+        ran = self.run_script(args(project="/src/prediction-bot", module="example.com/bot", fork=root, gate="x"),
+                              answers(**{"lane:a": lane(1, "internal/feeds", branch="run"),
+                                         "lane:b": lane(2, "internal/state", branch="run", start="1" * 40)}))
+        self.assertEqual(self.labels(ran)[:2], ["lane:a", "lane:b"])
+        ran = self.run_script(args(), answers())
+        self.assertIn("lane:a", self.labels(ran))
+        self.assertIn("no module given — whether this project is the bsc-geth fork is unchecked", ran["logs"])
+
     def test_a_fork_run_is_serial_and_stops_at_a_hand_back(self):
         fork = "/src/bsc-geth"
         three = [unit("a", "eth"), unit("b", "core"), unit("c", "miner")]

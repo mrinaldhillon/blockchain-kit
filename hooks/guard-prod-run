@@ -1,19 +1,51 @@
 #!/usr/bin/env python3
-"""PreToolUse guard (Bash): on the prod host, deny a bare replay, bot or collector run.
+"""PreToolUse guard (Bash): on the prod host, deny a bare replay, bot or collector run,
+and bare whole-module work in the bsc-geth tree.
 
-On the host that holds the recorder log, a replay, bot or collector binary started
-straight from the shell runs uncapped beside the collectors that own that
-irreplaceable log. The sanctioned path is
+Two classes, each with its own deny reason; both name the kill switch.
+
+The binary class (the client, prediction-bot). On the host that holds the recorder
+log, a replay, bot or collector binary started straight from the shell runs uncapped
+beside the collectors that own that irreplaceable log. The sanctioned path is
 
     scripts/replay-run.sh [--mem-max <N>G] [--cpus <N>] -- <binary> [args]
 
-which runs it under cgroup caps. The deny reason says so and names the kill switch.
+which runs it under cgroup caps.
+
+The bsc class (the fork). Whole-module work run bare in the fork's tree saturates the
+housekeeping cores that carry the production geth's NIC IRQs. The sanctioned paths are
+
+    python3 build/unit_run.py --name <slug> --mem 16G -- <cmd>
+    python3 build/unit_run.py --wait <slug>
+
+and cmd/verifyconstrained. The class is keyed on the tree the command targets, not on
+the session's project root: the payload `cwd`, moved by a `cd <dir>` segment before the
+command, or the directory a `-C <dir>` (also -C<dir>, --directory[=]<dir>) of make, go or
+git names, relative to that; $VARS and ~ in the directory are expanded from the hook's
+environment. The class applies when forkpin.module_root of that directory holds a go.mod
+whose module is github.com/ethereum/go-ethereum (forkpin.is_fork): stat and file reads
+only, no subprocess.
 
 Host: bkhost.prod_host() (lib/bkhost.py: the geth IPC path, $BLOCKCHAIN_KIT_IPC, is a
 unix socket). Off the prod host, for a tool other than Bash, or for an empty command it
 exits 0 and prints nothing.
 
-Denied, at command position in any segment of the command:
+The bsc class denies, at command position in any segment, in a fork tree:
+  - make with a goal of test, lint or geth-prod;
+  - go test, go vet or go build with the argument ./... (the whole module);
+  - golangci-lint, unless its sole argument is a help or version flag;
+  - go run build/ci.go test|lint, and go run ./build/ci.go test|lint.
+and does not deny:
+  - the same under a command word that wraps it: build/unit_run.py (any path ending in
+    unit_run.py, run directly or as `python3 build/unit_run.py`), systemd-run, or
+    verifyconstrained (any path ending so, or `go run ./cmd/verifyconstrained`): the
+    heavy command is then an argument, not at command position;
+  - a package-scoped run: go test ./eth/..., go test ./eth -run X;
+  - make geth, make audit-ext, make audit-ext-test, make modzip-check, make fmt, and any
+    goal not named above;
+  - any of it in a tree that is not the fork, the client's included.
+
+The binary class denies, at command position in any segment of the command:
   - replay, bot, collector-bsc, collector-binance-spot, collector-binance-perp: the
     basename of the command word, with any path prefix (./bin/bot, /srv/pb/bin/replay);
   - `go run` with an argument that is a [prefix/]cmd/<name> package path for one of
@@ -54,9 +86,15 @@ Residuals: real runs it does not see, and over-detections it keeps.
   - A quoted word that is all shell punctuation (`echo ";" bot`) reads as an operator.
   - A `#` comment is not one: its words are arguments of the command before it, and
     an operator inside it splits the command.
+  - bsc class: a shlex parse error allows (the raw-text fallback is the binary
+    class's only). A directory moved by `pushd`, a subshell's `cd`, `env -C` or
+    `make -f <path>` is not followed; a `cd` in one segment moves every later one, in
+    a pipeline or a subshell too. A whole-module run spelled otherwise (`go test ...`,
+    `go test github.com/ethereum/go-ethereum/...`, a make target that calls ci.go
+    under another name) is not seen.
 This is a footgun guard for an agent following instructions, not a security boundary
 against one evading them. pb's heavy-work class (make targets, `go test ./...`,
-golangci-lint) is not carried here.
+golangci-lint in the client's tree) is not carried here; the fork's is, above.
 
 A guard: it fails CLOSED. Exit 2 with the reason on stderr on an unparseable payload or
 its own bug, on any host, because a guard that dies must not let the call proceed.
@@ -118,6 +156,22 @@ REASON = ("guard-prod-run: on the prod host a bare replay, bot or collector bina
           "scripts/replay-run.sh [--mem-max <N>G] [--cpus <N>] -- <binary> [args], which runs it under "
           "cgroup caps. If an uncapped run is intended, the operator turns this guard off with "
           "BLOCKCHAIN_KIT_GUARD_PROD_RUN=0 in the environment Claude Code starts with.")
+
+# The bsc class: whole-module work in the fork's tree.
+HEAVY_MAKE = frozenset({"test", "lint", "geth-prod"})
+HEAVY_GO = frozenset({"test", "vet", "build"})
+CI_GO = frozenset({"build/ci.go", "./build/ci.go"})
+CI_HEAVY = frozenset({"test", "lint"})
+MAKE_VALUE_OPTS = frozenset({"-C", "--directory", "-f", "--file", "--makefile", "-I", "--include-dir", "-o",
+                             "--old-file", "--assume-old", "-W", "--what-if", "--new-file", "--assume-new"})
+CHDIRS = frozenset({"make", "go", "git"})
+
+HEAVY_REASON = ("guard-prod-run: on the prod host, whole-module work in the bsc-geth tree (make test, make lint, "
+                "make geth-prod, go test|vet|build ./..., golangci-lint, go run build/ci.go test|lint) run bare is "
+                "uncapped and saturates the housekeeping cores that carry the production geth's NIC IRQs. Run it "
+                "as python3 build/unit_run.py --name <slug> --mem 16G -- <cmd> then python3 build/unit_run.py "
+                "--wait <slug>, or through cmd/verifyconstrained, or scope it to the packages touched "
+                "(go test ./eth/...); the operator turns this guard off with BLOCKCHAIN_KIT_GUARD_PROD_RUN=0.")
 
 
 def split_ops(token: str) -> list[str]:
@@ -254,6 +308,109 @@ def denied(command: str, depth: int = 0) -> bool:
     return False
 
 
+def chdir_of(base: str, args: list[str]) -> tuple[str | None, list[str]]:
+    """(the directory a `-C <dir>` names, the arguments without it) for make, go and git.
+    make takes -C anywhere and repeats it, each relative to the last; go and git take it
+    before the subcommand."""
+    named: str | None = None
+    rest: list[str] = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if base != "make" and not arg.startswith("-"):
+            rest.extend(args[i:])
+            break
+        value = None
+        if arg in ("-C", "--directory") and i + 1 < len(args):
+            value, i = args[i + 1], i + 2
+        elif arg.startswith("--directory="):
+            value, i = arg.split("=", 1)[1], i + 1
+        elif arg.startswith("-C") and len(arg) > 2:
+            value, i = arg[2:].removeprefix("="), i + 1
+        else:
+            rest.append(arg)
+            i += 1
+            continue
+        named = value if named is None else os.path.join(named, value)
+    return named, rest
+
+
+def make_targets(args: list[str]) -> list[str]:
+    """The goals of a make command: words that are neither options, their values, nor VAR=value."""
+    goals, i = [], 0
+    while i < len(args):
+        arg = args[i]
+        if arg in MAKE_VALUE_OPTS:
+            i += 2
+            continue
+        if not arg.startswith("-") and "=" not in arg:
+            goals.append(arg)
+        i += 1
+    return goals
+
+
+def heavy_run(base: str, args: list[str]) -> bool:
+    """True when (base, args), its -C removed, is whole-module work: the bsc class."""
+    if base == "make":
+        return any(goal in HEAVY_MAKE for goal in make_targets(args))
+    if base == "golangci-lint":
+        return not help_only(args)
+    if base != "go" or not args:
+        return False
+    sub, rest = args[0], args[1:]
+    if sub in HEAVY_GO:
+        return "./..." in rest
+    if sub == "run":
+        # the target: the first word that is a file or a package path, past flags and their values
+        at = next((i for i, arg in enumerate(rest)
+                   if not arg.startswith("-") and (arg.endswith(".go") or "/" in arg or arg == ".")), None)
+        return at is not None and rest[at] in CI_GO and at + 1 < len(rest) and rest[at + 1] in CI_HEAVY
+    return False
+
+
+def fork_tree(directory: str, seen: dict[str, bool]) -> bool:
+    """True when `directory` lies in a module that is the fork (forkpin.is_fork). Local reads."""
+    if directory not in seen:
+        import forkpin
+
+        root = forkpin.module_root(Path(directory))
+        seen[directory] = root is not None and forkpin.is_fork(root)
+    return seen[directory]
+
+
+def heavy_denied(command: str, cwd: str, depth: int = 0, seen: dict[str, bool] | None = None) -> bool:
+    """True when `command` runs whole-module work bare in a tree that is the fork. The tree is
+    `cwd`, as moved by a `cd <dir>` segment before it, or the `-C <dir>` of make, go or git."""
+    seen = {} if seen is None else seen
+    try:
+        toks = tokens(command)
+    except ValueError:
+        return False  # a residual: the raw-text fallback is the binary class's alone
+    here = cwd
+    for words in segments(toks):
+        found = command_word(words)
+        if found is None:
+            continue
+        base, args = found
+        if base == "cd":
+            dirs = [a for a in args if not a.startswith("-")]
+            if len(dirs) == 1:
+                here = os.path.join(here, os.path.expanduser(os.path.expandvars(dirs[0])))
+            continue
+        tree = here
+        if base in CHDIRS:
+            named, args = chdir_of(base, args)
+            if named is not None:
+                tree = os.path.join(here, os.path.expanduser(os.path.expandvars(named)))
+        if heavy_run(base, args) and fork_tree(os.path.normpath(tree), seen):
+            return True
+        if base in SHELLS and depth < MAX_DEPTH:
+            program = shell_program(args)
+            if program is not None and heavy_denied(program, here, depth + 1, seen):
+                return True
+    return False
+
+
 def main() -> int:
     if os.environ.get("BLOCKCHAIN_KIT_GUARD_PROD_RUN") == "0" or sys.stdin.isatty():
         return 0
@@ -270,13 +427,22 @@ def main() -> int:
     command = tool_input.get("command") or ""
     if not isinstance(command, str):
         raise TypeError("tool_input.command is not a string")
-    if not command.strip() or not denied(command):
+    if not command.strip():
         return 0
+    if denied(command):
+        reason = REASON
+    else:
+        cwd = body.get("cwd") or os.getcwd()
+        if not isinstance(cwd, str):
+            raise TypeError("cwd is not a string")
+        if not heavy_denied(command, cwd):
+            return 0
+        reason = HEAVY_REASON
 
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
         "permissionDecision": "deny",
-        "permissionDecisionReason": REASON,
+        "permissionDecisionReason": reason,
     }}))
     return 0
 

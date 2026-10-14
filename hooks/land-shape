@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PreToolUse (Bash): run prediction-bot's `dev-setup/ci/land` the one cheap way.
+"""PreToolUse (Bash): run `dev-setup/ci/land` (the client's, prediction-bot's) the one cheap way.
 
 A landing is one foreground Bash call, `git push -q && dev-setup/ci/land <PR>`, at a long
 tool timeout (working-here step 6). `land` polls its CI run itself. Inside the timeout,
@@ -14,8 +14,9 @@ command word of a segment, this hook returns the call's input with
     command holds a heredoc (`<<`), whose body is text, not commands;
   - `run_in_background` false;
   - `timeout` raised to TIMEOUT_MS. Claude Code reduces a value above the session's ceiling
-    to that ceiling; pb's `.claude/settings.json` raises the ceiling with
-    BASH_MAX_TIMEOUT_MS.
+    to that ceiling; the client's `.claude/settings.json` raises the ceiling with
+    BASH_MAX_TIMEOUT_MS, and a session rooted in bsc-geth has whatever ceiling that
+    clone's own settings set.
 Every other field is carried over as it is. Nothing is printed when nothing changes, for a
 tool other than Bash, or when `land` is only named (`grep land dev-setup/ci/land.py`).
 permissionDecision is left unset, so permission rules judge the rewritten call as usual.

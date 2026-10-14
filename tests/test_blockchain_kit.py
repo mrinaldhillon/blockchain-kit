@@ -124,10 +124,23 @@ class Kit(unittest.TestCase):
         assert text is not None
         self.assertIn("Fork index: STALE, built at 5bed3824ce90", text)
 
+    def test_the_fork_itself_is_given_the_table_and_no_pin(self):
+        ipc = self.socket_at("geth.ipc")
+        (self.tmp / "geth/.git").mkdir()  # a clone: the module root is found from below it
+        for cwd in ("geth", "geth/consensus/parlia"):
+            text = self.given(cwd, BLOCKCHAIN_KIT_IPC=str(ipc))
+            assert text is not None
+            self.assertTrue(text.startswith("# Using blockchain-kit"))
+            self.assertIn(f"\nHost: PRODUCTION — geth IPC live at {ipc}; the recorder archive is on this host.", text)
+            self.assertNotIn("Tests run offline against fixtures.", text)  # pb's framing
+            self.assertNotIn("Fork pin:", text)
+            self.assertNotIn("Fork checkout:", text)
+        self.assertIn(f"\nHost: dev — no geth IPC at {self.tmp / 'no-geth.ipc'}.", self.given("geth") or "")
+
     def test_anything_else_is_given_nothing(self):
         self.assertIsNone(self.given("notes"))
-        self.assertIsNone(self.given("geth"))  # the fork is developed from its client
         self.assertIsNone(self.given("bot", BLOCKCHAIN_KIT_CONTEXT="0"))
+        self.assertIsNone(self.given("geth", BLOCKCHAIN_KIT_CONTEXT="0"))
         self.assertIsNone(self.given("bot", stdin="not json"))
 
     # the kit, host, git-guard and stray-steering lines
@@ -195,6 +208,17 @@ class Kit(unittest.TestCase):
         assert text is not None
         self.assertNotIn("Git guard:", text)
         self.assertIn("Fork checkout: none named.", text)  # the other lines still there
+
+    def test_the_git_guard_line_in_the_fork_names_make_dev_setup(self):
+        self.commit("feat: the fork")
+        text = self.given("geth/consensus/parlia")
+        assert text is not None
+        self.assertIn("\nGit guard: core.hooksPath is unset — the main-ref guard is NOT armed in this checkout; "
+                      "run make dev-setup.", text)
+        self.git("geth", "config", "core.hooksPath", ".githooks")
+        self.assertIn("\nGit guard: .githooks has no reference-transaction hook — the main-ref guard is NOT "
+                      "armed; run make dev-setup.", self.given("geth") or "")
+        self.assertNotIn("make tools", self.given("geth") or "")
 
     def test_the_stray_steering_line_counts_tracked_files_besides_settings(self):
         shutil.rmtree(self.tmp / "bot/.git")

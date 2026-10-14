@@ -1,7 +1,7 @@
 """forkpin — which bsc-geth commit a Go module is pinned to, and the index built from it.
 
-Shared by bin/bsc-fork and bin/blockchain-kit-context. Stdlib only, and no `go`
-subprocess on the paths the session-start hook uses: it has a five second budget.
+Shared by bin/bsc-fork, bin/blockchain-kit-context and hooks/guard-prod-run. Stdlib
+only, and no `go` subprocess on the paths the hooks use: each has a five second budget.
 
 A consumer pins the fork with a go.mod replace:
 
@@ -15,10 +15,12 @@ wrote when it downloaded the pin:
 
 and the pinned source is the read-only tree at $GOMODCACHE/<modpath>@<pseudo>.
 
-The fork is also developed from the client's session, in a checkout the client names
-with $BSC_FORK_PATH. That checkout is what gets edited; what the client COMPILES is
-still the pin, unless a go.work at the client's root `use`s the checkout. Three trees,
-then, and a file:line is only true of the one it was read from.
+The fork is developed in one of two modes. From the client's session, in a checkout
+the client names with $BSC_FORK_PATH: that checkout is what gets edited, and what the
+client COMPILES is still the pin, unless a go.work at the client's root `use`s the
+checkout. Three trees, then, and a file:line is only true of the one it was read from.
+Or from a session rooted in the fork itself (is_fork at the module root): one tree, no
+pin, and nothing here about a pin applies to it.
 """
 
 from __future__ import annotations
