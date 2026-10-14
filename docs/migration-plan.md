@@ -7,9 +7,11 @@ Date 2026-10-01. Implements `docs/design.md` (cited as D§n). Bases: prediction-
 (`b02324d`), pb #903 (`f793dd09`), the tag `steering-final` on `5a23b577`, and C8 (`ci` is the
 only required check). Kit #4 and #5 followed it. Phase 4: the fresh clone
 `~/Developer/prediction-bot` runs the kit at project scope; the other clones have not been
-checked. Phase 5: in progress on 2026-10-14, rewritten to the 2026-10-09 ruling that
-bsc-geth keeps pb's shape (D§4.2); the kit change serving a bsc-rooted session is step 2.
-Phase 6: done on 2026-10-14 (kit #7). Phase 7: not started.
+checked. Phase 5: steps 1 to 4 landed on 2026-10-14 under the 2026-10-09 ruling that
+bsc-geth keeps pb's shape (D§4.2): bsc-geth `b379d3e03` and `d7d24edd9` on `mrinal/dev`, kit
+#17 (`a73abc4`); the fresh clone `~/Developer/bsc-geth` runs the kit at project scope and was
+live-verified on srv; `../bsc` and `bsc-chores` have not pulled the cut. Step 5 is
+operator-only. Phase 6: done on 2026-10-14 (kit #7). Phase 7: not started.
 
 **Style:** contract-first. Each task states what must be true when it is done and how that is
 observed. Bodies are written at execution.
