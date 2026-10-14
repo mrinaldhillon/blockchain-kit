@@ -3,10 +3,12 @@
 Date 2026-10-01. Implements `docs/design.md` (cited as D§n). Bases: prediction-bot (pb)
 `01f5af59`, blockchain-kit `6796a58`, bsc-geth `mrinal/dev`.
 
-**Status (2026-10-04).** Phases 0 and 2: done (kit PR #1, `f73be93`). Phase 1: done (pb #892
-as `0ffe6cf7`; #902 as `43bc699c` for the #868 records, which landed after phase 1's base).
-Phase 3: kit PR #3 and pb PR #903 are open on pb base `43bc699c`; C8 and the merge wait for
-the operator. Phases 4 to 7: not started.
+**Status (2026-10-14).** Phases 0 to 3: done. Phase 3 landed on 2026-10-09: kit #3
+(`b02324d`), pb #903 (`f793dd09`), the tag `steering-final` on `5a23b577`, and C8 (`ci` is the
+only required check). Kit #4 and #5 followed it. Phase 4: the fresh clone
+`~/Developer/prediction-bot` runs the kit at project scope; the other clones have not been
+checked. Phase 5: not started. Phase 6: triaged, and kit #7 is filed; the pb closes wait for
+the operator. Phase 7: not started.
 
 **Style:** contract-first. Each task states what must be true when it is done and how that is
 observed. Bodies are written at execution.
@@ -251,12 +253,17 @@ under the kit's fork skills.
   bsc-geth's open issues (53, almost all unlabelled), one row each: *product* (stays),
   *kit* (still true of the kit's design), *obsolete* (about a retired mechanism). A read-only
   fan-out; the table is shown to the operator before any write.
-- **I2 Transfer** the *kit* rows to blockchain-kit with `gh issue transfer`. **Close** the
-  *obsolete* rows with one comment naming the tag and this plan. Labels `steering` and
-  `deferred`-as-steering are retired in pb once empty.
+- **I2 Consolidate** (operator, 2026-10-14: one issue in the kit, not one transfer per
+  issue). The *kit* rows and the Claude part of each *mixed* row become live items of kit
+  #7, each carrying its original's substance. The originals close as duplicates of #7, and a
+  mixed original stays open with a comment. The *obsolete* and *done* rows close with one
+  comment each, naming the tag and #7. pb's `steering` label is retired once it is empty.
+  From now on, an issue about Claude itself is filed in the kit (`working-here` step 2).
 
-Done: pb's open issues carry no `steering` label; every transferred issue resolves in the
-kit; the counts moved, closed and kept are reported.
+Done: pb's open issues carry no `steering` label; #7 holds every live row; the counts moved,
+closed and kept are in #7. Triage of 2026-10-14, covering all 288 open issues:
+- pb: 14 moved, 4 mixed, 68 obsolete, 10 done, 122 kept;
+- bsc-geth: 0 moved, 70 kept.
 
 ## Phase 7 — measure
 
@@ -273,7 +280,7 @@ category is the next change to the kit.
   layer regardless.
 - Phase 5 step 2: revert the commit. Step 3 has no rollback but the pre-rebase ref, which is
   kept until the operator releases it.
-- Phase 6: a transferred issue can be transferred back; a closed one reopened.
+- Phase 6: a closed issue is reopened; a live item of #7 can be refiled in its repo.
 
 ## API-risk register
 
@@ -286,4 +293,3 @@ category is the next change to the kit.
 | Private-GitHub marketplace fetch | Measured 2026-10-09 in a throwaway config home: `marketplace add mrinaldhillon/blockchain-kit` cloned over HTTPS with the gh credential helper (SSH: host key not known), and `plugin install` recorded the SHA of `main` | A machine without GitHub HTTPS credentials fails to clone. The marketplace serves `main`, so a kit change reaches a clone only once it has merged |
 | `gh workflow run` then finding the run for a SHA | Dispatch returns no run id; the run must be matched by head SHA | `land` merges on a run for another SHA in a test with two quick pushes |
 | Posting `ci` from `land` on a `none` diff | Needs a token with status scope; branch protection is strict | The status is rejected, or the merge is refused as out of date |
-| `gh issue transfer` between private repos of one owner | Labels and milestones without a namesake are dropped | A dry run on one issue loses data the kit needs |
