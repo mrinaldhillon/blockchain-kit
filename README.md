@@ -46,6 +46,7 @@ read by the main loop and `make replay-parity` when owed.
 | `hooks/guard-secrets` | denies the file tools node identity and account material and the generic secret patterns; fails closed |
 | `hooks/guard-prod-run` | on the production host, denies a bare `replay`, `bot` or collector run that bypasses `scripts/replay-run.sh`; fails closed |
 | `hooks/land-shape` | runs a `dev-setup/ci/land` call in the foreground at a 30-minute timeout, with no `timeout` wrapper; fails open |
+| `hooks/workflow-tiers` | refuses a workflow script written in the session whose `agent()` calls leave `model` unset, so no stage inherits the session's tier by omission; fails open |
 | `hooks/gofmt-on-edit` | formats a Go file Claude writes, in the project or the fork checkout |
 | `lib/` | `forkpin.py` (the pin, the module cache, the checkout, `go.work`, the index), `bkhost.py` (the production-host test), `blockchain-kit-homes.sh` (the config home) |
 | `share/mcp-gopls.json` | the `gopls` entry for a repo's `.mcp.json` |
@@ -97,7 +98,8 @@ where its link goes.
 
 For terminal use of the commands: `export PATH="$HOME/.local/share/blockchain-kit/kit/bin:$PATH"`.
 Kill switches: `BLOCKCHAIN_KIT_CONTEXT=0`, `BLOCKCHAIN_KIT_GOFMT=0`,
-`BLOCKCHAIN_KIT_GUARD_SECRETS=0`, `BLOCKCHAIN_KIT_GUARD_PROD_RUN=0`.
+`BLOCKCHAIN_KIT_GUARD_SECRETS=0`, `BLOCKCHAIN_KIT_GUARD_PROD_RUN=0`, `BLOCKCHAIN_KIT_LAND_SHAPE=0`,
+`BLOCKCHAIN_KIT_WORKFLOW_TIERS=0`.
 
 **The gopls MCP server is the repo's**, in its `.mcp.json`, never the plugin's: a server a
 plugin ships is named for the plugin, and the agents are granted `mcp__gopls__<tool>`. The key

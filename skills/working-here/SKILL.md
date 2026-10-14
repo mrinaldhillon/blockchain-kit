@@ -85,6 +85,14 @@ The class is read off the diff, and the class decides the ceremony.
 - Implementation and review run at opus: `blockchain-kit:golang-implementer`,
   `blockchain-kit:code-reviewer`, the auditors. Git legwork runs at sonnet, a gate run at
   haiku. The workflow fixes these; a hand dispatch states its tier.
+- A workflow script written in the session names `model` on every `agent()`: sonnet for
+  measurement, git legwork and verification; haiku for a schema or gate check; opus for
+  implementation and review. The session's tier is written by name, only for a design or
+  review stage where a wrong judgment is expensive, and is never inherited by omission.
+  This overrides the harness's `workflow-authoring` text, which says "Default to omitting
+  it — the agent inherits the main-loop model": on 2026-10-14 that ran four measurement
+  agents and their verifies at Fable. The kit's `workflow-tiers` hook refuses a script
+  that leaves one unset.
 - Judgment stays in the session: the plan, a contract, an invariant, the reading of a red
   gate, the decision to land.
 - A dispatch that edits files gets the tree to itself, or its own worktree. Commit before you

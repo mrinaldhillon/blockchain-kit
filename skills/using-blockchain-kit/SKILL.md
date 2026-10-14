@@ -32,6 +32,7 @@ over anything here.
 | The one-time live capture of test fixtures | the `blockchain-kit:fixture-capturer` agent |
 | Right-sizing or tuning the running node | the `blockchain-kit:infra-profiler` agent |
 | Several independent units of one change, each with its own brief and packages | `/blockchain-kit:implement`: the user's command, which runs the `blockchain-kit:implement` workflow |
+| A workflow script written in the session (the `Workflow` tool) | every `agent()` names `model`: `blockchain-kit:working-here`, Tiers and dispatch. The `workflow-tiers` hook refuses one that leaves it unset |
 
 - **The node is a private fork, developed from this repo.** The import path reads
   `github.com/ethereum/go-ethereum` and resolves to bsc-geth at the commit `go.mod` pins.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "blockchain-kit",
-  "description": "Claude Code steering for prediction-bot and the bsc-geth fork it consumes: the working model (working-here) and the implement workflow; bsc-fork (the pinned fork's symbols, pin and source tree); a session-start hook with the routing table, the pin, the host and what is out of place; guards for secrets and for bare production runs; land-shape, which runs a landing in one cheap call; gofmt on edit; bk-gate; a status line (bk-statusline); skills for Go authoring, the fork's node API, contract ABI, Binance streams, the record format, replay parity, hot-path determinism and environment wiring; agents that implement, review, audit determinism and parity, index the fork, capture fixtures and profile the node.",
+  "description": "Claude Code steering for prediction-bot and the bsc-geth fork it consumes: the working model (working-here) and the implement workflow; bsc-fork (the pinned fork's symbols, pin and source tree); a session-start hook with the routing table, the pin, the host and what is out of place; guards for secrets and for bare production runs; land-shape, which runs a landing in one cheap call; workflow-tiers, which refuses a workflow script whose agents leave their model unset; gofmt on edit; bk-gate; a status line (bk-statusline); skills for Go authoring, the fork's node API, contract ABI, Binance streams, the record format, replay parity, hot-path determinism and environment wiring; agents that implement, review, audit determinism and parity, index the fork, capture fixtures and profile the node.",
   "author": {
     "name": "Mrinal Dhillon",
     "email": "mrinaldhillon@gmail.com"
