@@ -1,0 +1,310 @@
+#!/usr/bin/env python3
+"""PreToolUse (Workflow): refuse a workflow script that leaves an agent's model unset.
+
+Every `agent()` in a workflow script written in the session names its `model`
+(working-here, Tiers and dispatch): sonnet for measurement, git legwork and verification;
+haiku for a schema or gate check; opus for implementation and review. The session's tier
+is written by name, and only for a design or review stage where a wrong judgment is
+expensive; it is never inherited by omission. The harness's own workflow-authoring text
+says to omit `model`, and on 2026-10-14 that ran four measurement agents and their
+verifies at the session's tier, Fable, for work sonnet does. Nothing in the steering or
+a hook caught it. This hook does.
+
+Reads `tool_input.scriptPath` (the file; it takes precedence, as in the tool) or
+`tool_input.script`. A call by `name` alone runs a saved workflow, whose tiers are its
+own (`blockchain-kit:implement` fixes them), and is not inspected.
+
+The script is read as text, not parsed as JavaScript. String and template literals,
+comments and regex literals are blanked first, so a prompt that says "model" or a comment
+that says "agent(" is not seen. Then each `agent(` at a word boundary (not `.agent(`, not
+`subagent(`) is a call, and its second argument decides:
+  - no second argument, or an object literal with no `model` key at its top level and no
+    spread: DENIED, with the line and the start of the prompt;
+  - a `model` key at the top level (`model: x`, `'model': x`, the `model` shorthand): named;
+  - a bare identifier: resolved once, to a `const|let|var <name> = {...}` in the script,
+    and judged as that literal; anything else is not inspected;
+  - an object literal with a spread, a call, a ternary or any other expression: not
+    inspected, and allowed. `...modelOf(stage)` in `workflows/implement.js` is this case.
+A `model` whose value is a variable or a call is named: the tier is a choice the script
+made, which is the point.
+
+Not a guard: it fails OPEN. An unreadable scriptPath, a script the scanner cannot walk
+(an unterminated literal) or its own bug prints nothing and exits 0: this guards spend,
+not secrets or the production host, and a false deny costs a model request.
+
+Env:   BLOCKCHAIN_KIT_WORKFLOW_TIERS=0 turns it off.
+Usage: fed the PreToolUse JSON payload on stdin by hooks/hooks.json.
+Exit:  0 allow, or a deny on stdout · 0 on its own failure, printing nothing.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+
+NAME = "workflow-tiers"
+CALL = re.compile(r"(?<![\w$.])agent\s*\(")
+IDENT = re.compile(r"[A-Za-z_$][\w$]*")
+MODEL_KEY = re.compile(r"""^(?:model|'model'|"model")\s*:""")
+# A `/` after one of these (or at the start) opens a regex literal; after anything else it divides.
+REGEX_BEFORE = frozenset("(,=:[!&|?{};+-*%<>~^")
+OPEN, CLOSE = "([{", ")]}"
+PREVIEW = 48
+
+RULE = ("Every agent() in a workflow script names its model (working-here, Tiers and dispatch): "
+        "sonnet for measurement, git legwork and verification; haiku for a schema or gate check; "
+        "opus for implementation and review. The session's tier is written by name, only for a "
+        "design or review stage where a wrong judgment is expensive, and is never inherited by "
+        "omission. Set `model` on each call listed and send the script again. The operator turns "
+        "this hook off with BLOCKCHAIN_KIT_WORKFLOW_TIERS=0 in the environment Claude Code starts with.")
+
+
+class Unwalkable(Exception):
+    """The scanner ran off the end inside a literal or a bracket."""
+
+
+def mask(src: str) -> str:
+    """`src` with the contents of strings, templates, regex literals and comments blanked.
+    Same length, same newlines, so offsets and line numbers hold. Raises Unwalkable."""
+    out = list(src)
+    n = len(src)
+
+    def blank(a: int, b: int) -> None:
+        for k in range(a, b):
+            if out[k] != "\n":
+                out[k] = " "
+
+    def skip_string(i: int, quote: str) -> int:  # i at the opening quote; returns past the closing one
+        j = i + 1
+        while j < n and src[j] != quote:
+            if src[j] == "\n":
+                raise Unwalkable("newline in a string")
+            j += 2 if src[j] == "\\" else 1
+        if j >= n:
+            raise Unwalkable("unterminated string")
+        blank(i + 1, j)
+        return j + 1
+
+    def skip_regex(i: int) -> int:  # i at the opening slash; returns past the closing one
+        j, in_class = i + 1, False
+        while j < n and (src[j] != "/" or in_class):
+            if src[j] == "\n":
+                raise Unwalkable("newline in a regex")
+            if src[j] == "\\":
+                j += 1
+            elif src[j] == "[":
+                in_class = True
+            elif src[j] == "]":
+                in_class = False
+            j += 1
+        if j >= n:
+            raise Unwalkable("unterminated regex")
+        blank(i + 1, j)
+        j += 1
+        while j < n and src[j].isalpha():  # flags
+            j += 1
+        return j
+
+    def skip_template(i: int) -> int:  # i at the opening backtick; returns past the closing one
+        j = i + 1
+        while j < n and src[j] != "`":
+            if src[j] == "\\":
+                blank(j, j + 2)
+                j += 2
+            elif src.startswith("${", j):
+                blank(j, j + 2)
+                j = walk(j + 2, "}")
+                blank(j - 1, j)  # the closing brace is the literal's, not code
+            else:
+                blank(j, j + 1)
+                j += 1
+        if j >= n:
+            raise Unwalkable("unterminated template")
+        return j + 1
+
+    def walk(i: int, until: str | None) -> int:
+        """Mask code from i; stop past the bracket `until` at depth 0 (or at the end)."""
+        depth = 0
+        while i < n:
+            c = src[i]
+            two = src[i : i + 2]
+            if two == "//":
+                j = src.find("\n", i)
+                j = n if j < 0 else j
+                blank(i, j)
+                i = j
+            elif two == "/*":
+                j = src.find("*/", i + 2)
+                if j < 0:
+                    raise Unwalkable("unterminated comment")
+                blank(i, j + 2)
+                i = j + 2
+            elif c in "'\"":
+                i = skip_string(i, c)
+            elif c == "`":
+                i = skip_template(i)
+            elif c == "/" and regex_here(i):
+                i = skip_regex(i)
+            elif c in OPEN:
+                depth += 1
+                i += 1
+            elif c in CLOSE:
+                if depth == 0:
+                    if until is not None and c == until:
+                        return i + 1
+                    raise Unwalkable("unbalanced bracket")
+                depth -= 1
+                i += 1
+            else:
+                i += 1
+        if until is not None:
+            raise Unwalkable("unterminated expression")
+        return i
+
+    def regex_here(i: int) -> bool:
+        k = i - 1
+        while k >= 0 and out[k] in " \t\r\n":
+            k -= 1
+        if k < 0:
+            return True
+        prev = "".join(out[max(0, k - 6) : k + 1])
+        return out[k] in REGEX_BEFORE or bool(re.search(r"\b(return|typeof|case|in|of|do|else)$", prev))
+
+    walk(0, None)
+    return "".join(out)
+
+
+def closing(masked: str, i: int) -> int:
+    """The index of the bracket that closes the one at i. Raises Unwalkable."""
+    depth = 0
+    for j in range(i, len(masked)):
+        if masked[j] in OPEN:
+            depth += 1
+        elif masked[j] in CLOSE:
+            depth -= 1
+            if depth == 0:
+                return j
+    raise Unwalkable("unbalanced bracket")
+
+
+def top_level_split(masked: str) -> list[tuple[str, int]]:
+    """(piece, offset) for `masked` split at its depth-0 commas, each piece stripped of
+    the whitespace around it and placed by its first character; a trailing empty piece,
+    from a trailing comma, is dropped."""
+    out: list[tuple[str, int]] = []
+
+    def push(a: int, b: int) -> None:
+        piece = masked[a:b]
+        out.append((piece.strip(), a + len(piece) - len(piece.lstrip())))
+
+    depth, start = 0, 0
+    for j, c in enumerate(masked):
+        if c in OPEN:
+            depth += 1
+        elif c in CLOSE:
+            depth -= 1
+        elif c == "," and depth == 0:
+            push(start, j)
+            start = j + 1
+    push(start, len(masked))
+    if out and out[-1][0] == "":
+        out.pop()
+    return out
+
+
+def literal_names_model(masked: str, src: str, start: int, end: int) -> bool | None:
+    """For the `{...}` body at [start, end): True when a `model` key is at the top level,
+    None when a spread makes that unknowable, False when neither. The key is read from
+    `src`: a quoted key is blank in `masked`."""
+    spread = False
+    for entry, off in top_level_split(masked[start:end]):
+        at = start + off
+        if entry == "model" or MODEL_KEY.match(src[at : at + len(entry)]):
+            return True
+        if entry.startswith("..."):
+            spread = True
+    return None if spread else False
+
+
+def names_model(masked: str, src: str, opts: str, at: int) -> bool | None:
+    """Whether the second argument of an agent() call, `opts` at offset `at`, names a
+    model: False for a plain omission, True when named, None when the text does not say."""
+    if opts.startswith("{") and opts.endswith("}"):
+        return literal_names_model(masked, src, at + 1, at + len(opts) - 1)
+    if IDENT.fullmatch(opts):
+        hit = re.search(rf"\b(?:const|let|var)\s+{re.escape(opts)}\s*=\s*\{{", masked)
+        if hit is None:
+            return None
+        start = hit.end() - 1
+        return literal_names_model(masked, src, start + 1, closing(masked, start))
+    return None
+
+
+def unset(src: str) -> list[tuple[int, str]]:
+    """(line, the call's arguments, cut at PREVIEW) of each agent() call whose model is
+    plainly unset."""
+    masked = mask(src)
+    found = []
+    for hit in CALL.finditer(masked):
+        open_at = hit.end() - 1
+        close_at = closing(masked, open_at)
+        if masked[close_at + 1 :].lstrip().startswith("{"):
+            continue  # `agent(p) {`: a function or method named agent, not a call
+        args = [(piece, open_at + 1 + off) for piece, off in top_level_split(masked[open_at + 1 : close_at])]
+        if not args:
+            continue
+        named = names_model(masked, src, args[1][0], args[1][1]) if len(args) > 1 else False
+        if named is False:
+            inner = " ".join(src[args[0][1] : close_at].split())
+            if len(inner) > PREVIEW:
+                inner = inner[:PREVIEW] + "..."
+            found.append((src.count("\n", 0, hit.start()) + 1, inner))
+    return found
+
+
+def script_text(tool_input: dict[str, object]) -> str | None:
+    path = tool_input.get("scriptPath")
+    if isinstance(path, str) and path:
+        return Path(path).read_text(encoding="utf-8")  # unreadable: the exception fails open
+    script = tool_input.get("script")
+    return script if isinstance(script, str) and script else None
+
+
+def main() -> int:
+    if os.environ.get("BLOCKCHAIN_KIT_WORKFLOW_TIERS") == "0" or sys.stdin.isatty():
+        return 0
+    body = json.load(sys.stdin)
+    if not isinstance(body, dict) or body.get("tool_name") != "Workflow":
+        return 0
+    tool_input = body.get("tool_input")
+    if not isinstance(tool_input, dict):
+        return 0
+    src = script_text(tool_input)
+    if src is None:
+        return 0
+    calls = unset(src)
+    if not calls:
+        return 0
+    where = "; ".join(f"line {line}: agent({inner})" for line, inner in calls)
+    noun = "call leaves" if len(calls) == 1 else "calls leave"
+    reason = (f"{NAME}: {len(calls)} agent() {noun} `model` unset, so each would inherit the session's "
+              f"tier: {where}. {RULE}")
+    print(json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "deny",
+        "permissionDecisionReason": reason,
+    }}))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as err:  # noqa: BLE001 - not a guard: it fails OPEN, the call runs as sent
+        print(f"{NAME}: left the call as sent: {err}", file=sys.stderr)
+        sys.exit(0)
