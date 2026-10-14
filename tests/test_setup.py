@@ -157,6 +157,26 @@ class Setup(unittest.TestCase):
                       f"git -C {self.proj} diff -- .claude/settings.json", done.stdout)
         self.assertNotIn("FAIL", done.stdout)
 
+    def test_setup_in_a_fork_clone_needs_no_fork_path_and_no_goprivate(self):
+        (self.proj / "go.mod").write_text("module github.com/ethereum/go-ethereum\n\ngo 1.24\n")
+        for env in ({}, {"BSC_FORK_PATH": str(self.tmp / "absent")}):
+            done = self.run_tool(SETUP, "--scope", "project", "--project", str(self.proj), "--fork-owner", "other", **env)
+            self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+            self.assertIn("  ok     BSC_FORK_PATH          this clone is the fork; nothing to set\n", done.stdout)
+            self.assertIn("  ok     GOPRIVATE              github.com/mrinaldhillon/* does not cover github.com/other — "
+                          "not needed here: this clone is the fork, with no pin to download\n", done.stdout)
+            self.assertNotIn("warn   BSC_FORK_PATH", done.stdout)
+            self.assertNotIn("warn   GOPRIVATE", done.stdout)
+        # user scope is unchanged, wherever it runs from
+        done = self.run_tool(SETUP, "--fork-owner", "other", cwd=self.proj)
+        self.assertIn("  warn   BSC_FORK_PATH          not set", done.stdout)
+        self.assertIn("  warn   GOPRIVATE              github.com/mrinaldhillon/* does not cover github.com/other\n"
+                      "         a fork client cannot download its pin", done.stdout)
+        # and so is a project-scope run in a clone that is not the fork
+        (self.proj / "go.mod").write_text("module example.com/bot\n")
+        done = self.run_tool(SETUP, "--scope", "project", "--project", str(self.proj))
+        self.assertIn("  warn   BSC_FORK_PATH          not set", done.stdout)
+
     def test_setup_refuses_a_directory_where_the_link_goes(self):
         kit = self.tmp / "data/blockchain-kit/kit"
         kit.mkdir(parents=True)  # a kit cloned there to bootstrap setup

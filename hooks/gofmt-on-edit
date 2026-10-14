@@ -2,8 +2,9 @@
 """PostToolUse observer (Edit|Write|MultiEdit): gofmt the Go file just written.
 
 Scope is deliberately narrow: `tool_input.file_path` must end in `.go` AND
-resolve (symlinks included) under ${CLAUDE_PROJECT_DIR} or under the bsc-geth
-checkout that project edits ($BSC_FORK_PATH, or the one its go.work uses). An
+resolve (symlinks included) under ${CLAUDE_PROJECT_DIR} (the client, or a bsc-geth
+clone the session is rooted in) or under the bsc-geth checkout the client edits
+($BSC_FORK_PATH, or the one its go.work uses). An
 edit anywhere else and an edit to anything that is not Go are both no-ops.
 Inside the scope the file is formatted in place with `<gofmt> -l -w <file_path>`
 and nothing is said; a formatter that exits non-zero or is absent surfaces ONE

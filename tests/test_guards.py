@@ -87,9 +87,57 @@ def run_all(script: Path, stdins: list[str], env: dict[str, str] | list[dict[str
     return results
 
 
-def payload(tool: str, **tool_input: str) -> str:
+# The bsc class: whole-module work in the fork's tree.
+HEAVY = (
+    "make test",
+    "make lint",
+    "make geth-prod",
+    "make -j8 test",
+    "go test ./...",
+    "go test -count=1 -race ./...",
+    "go vet ./...",
+    "go build ./...",
+    "golangci-lint run",
+    "go run build/ci.go test",
+    "go run ./build/ci.go lint",
+    "go run -tags ci build/ci.go test -coverage",
+    "nice -n 5 go test ./...",
+    "GOFLAGS=-mod=mod make test",
+    "echo x && make test",
+    "bash -c 'go vet ./...'",
+)
+WRAPPED = (
+    "python3 build/unit_run.py --name t --mem 16G -- make test",
+    "python3 build/unit_run.py --name t --mem 16G -- go test ./...",
+    "./build/unit_run.py --name t -- golangci-lint run",
+    "python3 build/unit_run.py --wait t",
+    "systemd-run --user --scope -p MemoryMax=16G make lint",
+    "verifyconstrained go test ./...",
+    "./bin/verifyconstrained make test",
+    "go run ./cmd/verifyconstrained -- go run build/ci.go test",
+)
+SCOPED = (
+    "go test ./eth/...",
+    "go test ./eth -run TestX",
+    "go vet ./core/...",
+    "go build ./cmd/geth",
+    "make geth",
+    "make audit-ext",
+    "make audit-ext-test",
+    "make modzip-check",
+    "make fmt",
+    "golangci-lint --version",
+    "go run build/ci.go install",
+    "grep -n 'make test' Makefile",
+)
+NODE_GOMOD = "module github.com/ethereum/go-ethereum\n\ngo 1.24\n"
+CLIENT_GOMOD = ("module example.com/bot\n\ngo 1.26\n\nrequire github.com/ethereum/go-ethereum v1.16.3\n\nreplace "
+                "github.com/ethereum/go-ethereum => github.com/someone/bsc-geth v0.0.0-20260921040038-a539ea2ca63c\n")
+
+
+def payload(tool: str, cwd: str = "/repo", **tool_input: str) -> str:
     return json.dumps({"hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": tool_input,
-                       "cwd": "/repo"})
+                       "cwd": cwd})
 
 
 class Guards(unittest.TestCase):
@@ -98,6 +146,12 @@ class Guards(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.tmp = Path(os.path.realpath(tmp.name))
         self.ipc = self.tmp / "geth.ipc"
+        for tree, gomod in (("fork", NODE_GOMOD), ("bot", CLIENT_GOMOD)):
+            (self.tmp / tree / ".git").mkdir(parents=True)  # a clone: its module root is found from below
+            (self.tmp / tree / "go.mod").write_text(gomod)
+        (self.tmp / "fork/eth/protocols").mkdir(parents=True)
+        (self.tmp / "bot/internal").mkdir(parents=True)
+        self.fork, self.bot = str(self.tmp / "fork"), str(self.tmp / "bot")
         back = os.getcwd()
         os.chdir(self.tmp)  # bind by a relative name: AF_UNIX paths stop at 108 bytes
         try:
@@ -198,11 +252,70 @@ class Guards(unittest.TestCase):
             with self.subTest(case=what):
                 self.assertAllowed(result, what)
 
+    # guard-prod-run, the bsc class
+
+    def prod(self, **more: str) -> dict[str, str]:
+        return self.env(BLOCKCHAIN_KIT_IPC=str(self.ipc), **more)
+
+    def assertHeavyDenied(self, result: tuple[int, str, str], what: str) -> None:
+        reason = self.assertDenied(result, what)["permissionDecisionReason"]
+        self.assertIn("python3 build/unit_run.py --name <slug> --mem 16G -- <cmd>", reason)
+        self.assertIn("python3 build/unit_run.py --wait <slug>", reason)
+        self.assertIn("cmd/verifyconstrained", reason)
+        self.assertIn("housekeeping cores that carry the production geth's NIC IRQs", reason)
+        self.assertIn("BLOCKCHAIN_KIT_GUARD_PROD_RUN=0", reason)
+        self.assertNotIn("scripts/replay-run.sh", reason)
+
+    def test_whole_module_work_in_the_fork_is_denied_on_the_prod_host(self):
+        cases = [(c, cwd) for c in HEAVY for cwd in (self.fork, f"{self.fork}/eth/protocols")]
+        results = run_all(PROD_RUN, [payload("Bash", cwd=cwd, command=c) for c, cwd in cases], self.prod())
+        for (command, cwd), result in zip(cases, results):
+            with self.subTest(command=command, cwd=cwd):
+                self.assertHeavyDenied(result, command)
+
+    def test_the_fork_named_from_the_clients_tree_is_denied(self):
+        commands = (f"make -C {self.fork} test", f"make --directory={self.fork} lint", f"go -C {self.fork} test ./...",
+                    "make -C ../fork geth-prod", f"cd {self.fork} && go vet ./...", "cd $FORK && make test",
+                    f"cd {self.fork}/eth && go build ./...")
+        results = run_all(PROD_RUN, [payload("Bash", cwd=self.bot, command=c) for c in commands],
+                          self.prod(FORK=self.fork))
+        for command, result in zip(commands, results):
+            with self.subTest(command=command):
+                self.assertHeavyDenied(result, command)
+
+    def test_wrapped_and_package_scoped_work_in_the_fork_is_allowed(self):
+        commands = (*WRAPPED, *SCOPED)
+        results = run_all(PROD_RUN, [payload("Bash", cwd=self.fork, command=c) for c in commands], self.prod())
+        for command, result in zip(commands, results):
+            with self.subTest(command=command):
+                self.assertAllowed(result, command)
+
+    def test_the_bsc_class_is_inert_off_the_fork_and_off_the_prod_host(self):
+        cases = [(c, self.bot, self.prod()) for c in HEAVY]  # the client's tree: not this class
+        cases += [(c, f"{self.bot}/internal", self.prod()) for c in ("make test", "go test ./...")]
+        cases += [(f"make -C {self.bot} test", self.fork, self.prod()),  # -C moves it out of the fork
+                  (f"cd {self.bot} && go test ./...", self.fork, self.prod()),
+                  ("make test", str(self.tmp), self.prod()),  # no go.mod at all
+                  ("make test", "/nonexistent/dir", self.prod())]
+        cases += [(c, self.fork, self.env()) for c in HEAVY]  # a dev host: no socket
+        cases += [("make test", self.fork, self.prod(BLOCKCHAIN_KIT_GUARD_PROD_RUN="0"))]
+        results = run_all(PROD_RUN, [payload("Bash", cwd=cwd, command=c) for c, cwd, _ in cases],
+                          [env for _, _, env in cases])
+        for (command, cwd, env), result in zip(cases, results):
+            with self.subTest(command=command, cwd=cwd, ipc=env["BLOCKCHAIN_KIT_IPC"]):
+                self.assertAllowed(result, command)
+
+    def test_the_binary_class_keeps_its_reason_in_the_fork(self):
+        result = run_all(PROD_RUN, [payload("Bash", cwd=self.fork, command="./bin/bot && make test")], self.prod())[0]
+        self.assertIn("scripts/replay-run.sh", self.assertDenied(result, "bot")["permissionDecisionReason"])
+
     def test_prod_run_fails_closed_on_either_host(self):
         ipcs = [str(self.ipc), str(self.ipc), str(self.tmp / "absent.ipc"), str(self.tmp / "absent.ipc")]
         results = run_all(PROD_RUN, ["not json", "[1, 2]"] * 2, [self.env(BLOCKCHAIN_KIT_IPC=i) for i in ipcs])
         for ipc, result in zip(ipcs, results):
             self.assertFailsClosed(result, f"unparseable payload, IPC {ipc}")
+        bad_cwd = json.dumps({"tool_name": "Bash", "tool_input": {"command": "make test"}, "cwd": 7})
+        self.assertFailsClosed(run_all(PROD_RUN, [bad_cwd], self.prod())[0], "a cwd that is not a string")
 
 
 if __name__ == "__main__":

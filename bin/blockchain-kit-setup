@@ -20,10 +20,14 @@
 #              bare `gopls` needs it on the PATH claude was started with. A repo
 #              that pins its own binary (./dev-setup/bin/gopls) needs nothing here.
 #   GOPRIVATE  whether `go env GOPRIVATE` covers the private fork's module path;
-#              without it `go mod download` asks the public proxy for a private
-#              repository and fails
+#              without it a fork client's `go mod download` asks the public proxy
+#              for a private repository and fails. In a fork clone (below) the
+#              row is information: there is no pin to download
 #   BSC_FORK_PATH  whether it names a bsc-geth clone: the checkout a session in
-#              the fork's client edits. Reported, never cloned
+#              the fork's client edits. Reported, never cloned. With --scope
+#              project in a fork clone (its go.mod is `module
+#              github.com/ethereum/go-ethereum`) the row is ok whatever it is set
+#              to: the clone is the fork, and nothing needs setting
 #
 # The config home is $CLAUDE_CONFIG_DIR when set, else ~/.claude.
 #
@@ -52,7 +56,7 @@ while [[ $# -gt 0 ]]; do
 	--project) KIT_PROJECT="${2:?--project needs a value}"; shift 2 ;;
 	--source) KIT_MARKETPLACE_SOURCE="${2:?--source needs a value}"; shift 2 ;;
 	--fork-owner) fork_owner="${2:?--fork-owner needs a value}"; shift 2 ;;
-	-h | --help) sed -n '2,41p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h | --help) sed -n '2,45p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	*) echo "blockchain-kit-setup: unknown argument: $1 (see --help)" >&2; exit 2 ;;
 	esac
 done
@@ -60,6 +64,13 @@ resolve_scope blockchain-kit-setup
 
 command -v claude >/dev/null || { echo "blockchain-kit-setup: claude CLI not on PATH" >&2; exit 1; }
 open_log blockchain-kit-setup
+
+# fork_clone — true when this is a project-scope run in a bsc-geth clone: the fork itself.
+fork_clone() {
+	[[ "$KIT_SCOPE" == project ]] &&
+		grep --quiet --extended-regexp '^module[[:space:]]+github\.com/ethereum/go-ethereum[[:space:]]*$' \
+			"$KIT_PROJECT/go.mod" 2>/dev/null
+}
 
 # settings_sha — the sha256 of the clone's .claude/settings.json, `absent` without one.
 settings_sha() {
@@ -138,15 +149,21 @@ else
 		say "  ok     $(pad "GOPRIVATE") $private"
 		;;
 	*)
-		say "  warn   $(pad "GOPRIVATE") ${private:-(empty)} does not cover github.com/$fork_owner"
-		say "         a fork client cannot download its pin: go env -w GOPRIVATE=github.com/$fork_owner/*"
+		if fork_clone; then
+			say "  ok     $(pad "GOPRIVATE") ${private:-(empty)} does not cover github.com/$fork_owner — not needed here: this clone is the fork, with no pin to download"
+		else
+			say "  warn   $(pad "GOPRIVATE") ${private:-(empty)} does not cover github.com/$fork_owner"
+			say "         a fork client cannot download its pin: go env -w GOPRIVATE=github.com/$fork_owner/*"
+		fi
 		;;
 	esac
 fi
 
 # the fork checkout: reported, never cloned
 checkout="${BSC_FORK_PATH:-}"
-if [[ -z "$checkout" ]]; then
+if fork_clone; then
+	say "  ok     $(pad "BSC_FORK_PATH") this clone is the fork; nothing to set"
+elif [[ -z "$checkout" ]]; then
 	say "  warn   $(pad "BSC_FORK_PATH") not set — a session can read the fork (the pin) and not edit it"
 	say "         to develop the fork from its client: export BSC_FORK_PATH=<a bsc-geth clone> where claude starts"
 elif grep --quiet --extended-regexp '^module[[:space:]]+github\.com/ethereum/go-ethereum[[:space:]]*$' \

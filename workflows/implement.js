@@ -29,7 +29,16 @@ export const meta = {
 //     gate: 'make test-offline PKG=./internal/feeds/... ./internal/state/...',
 //     fork: '/abs/path/to/bsc-geth', // set when the units are FORK work: see below
 //     tiers: { review: 'session' },  // per-stage model; nothing above opus by name
+//     project: '/abs/path/to/clone', // the session's project root, and
+//     module: 'example.com/bot',     // the module its go.mod names: see below
 //   }
+// The script cannot read the filesystem, so the caller says what the project is;
+// hooks/implement-args fills both from the disk when they are absent, and itself
+// denies the call in the fork, so this check is the second line. When `module` is github.com/ethereum/go-ethereum the session is rooted in the
+// bsc-geth fork itself, and a run is refused before any agent starts when `fork` is
+// unset or names `project` (compared as given, trailing slashes dropped, no symlink
+// resolution): in-place fork runs are not supported yet. Without `module` that check
+// is not made, and the run logs so.
 // The project's .claude/settings.json must set worktree.baseRef to "head": under the
 // default a lane starts at origin/<default-branch>, and the start check drops it.
 //
@@ -144,6 +153,8 @@ const units = Array.isArray(a.units) ? a.units : []
 const branch = a.branch ? String(a.branch) : ''
 const head = a.head ? String(a.head) : ''
 const fork = a.fork ? String(a.fork) : ''
+const project = a.project ? String(a.project) : ''
+const projectModule = a.module ? String(a.module) : ''
 const gateCmd = a.gate ? String(a.gate) : fork ? 'make audit-ext' : ''
 const TIERS = Object.assign({ lane: 'opus', integrate: 'sonnet', gate: 'haiku', review: 'opus', fix: 'opus' }, a.tiers || {})
 
@@ -171,7 +182,17 @@ const refuse = (error, detail) => {
   log(`refused: ${error}`)
   return { error, ...(detail || {}) }
 }
-if (units.length === 0) return refuse('no units', { expected: '{units:[{id, brief, packages?, skills?}], branch, head, gate, fork?, tiers?}' })
+if (units.length === 0) return refuse('no units', { expected: '{units:[{id, brief, packages?, skills?}], branch, head, gate, fork?, tiers?, project?, module?}' })
+const bare = (p) => String(p).replace(/\/+$/, '')
+if (projectModule === 'github.com/ethereum/go-ethereum' && (!fork || (project && bare(fork) === bare(project)))) {
+  return refuse(
+    'This project is the bsc-geth fork; in-place fork runs are not supported yet (kit #16). Dispatch ' +
+      'blockchain-kit:golang-implementer by hand, package-scoped, or run implement from the prediction-bot clone ' +
+      'with `fork` set.',
+    { project, module: projectModule, fork },
+  )
+}
+if (!projectModule) log('no module given — whether this project is the bsc-geth fork is unchecked')
 const bad = units.filter((u) => !u || !u.id || !u.brief)
 if (bad.length) return refuse('a unit lacks id or brief', { count: bad.length })
 const ids = units.map((u) => String(u.id))

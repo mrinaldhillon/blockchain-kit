@@ -1,7 +1,9 @@
 # blockchain-kit
 
-The Claude Code steering for **prediction-bot** and the **bsc-geth fork** it consumes, developed
-together from one session rooted in prediction-bot. A Claude Code plugin plus terminal
+The Claude Code steering for **prediction-bot** and the **bsc-geth fork** it consumes; a
+session is rooted in either. The fork is developed in its own clone, from a prediction-bot
+session through `BSC_FORK_PATH`, or, for a bot change that needs a fork change, both ways in
+order within one prediction-bot session (fork, pin, bot). A Claude Code plugin plus terminal
 commands. It has no other consumer, and it names their paths, make targets and branches freely.
 
 Both repositories keep project facts (`CLAUDE.md`, `docs/`) and the minimum the harness needs
@@ -18,7 +20,8 @@ hand. `skills/working-here` is the whole process:
 2. Open work persists as issues, never as plan, ledger or resume files.
 3. `/blockchain-kit:implement` runs the units: one opus lane per unit in its own worktree, the
    lane branches merged into the run branch, the gate, one review seat, one fix round.
-4. The session adjudicates what came back and lands with prediction-bot's `dev-setup/ci/land`.
+4. The session adjudicates what came back and lands with prediction-bot's `dev-setup/ci/land`
+   or, in bsc-geth, pushes `mrinal/dev` (`mrinal/master` is not touched).
 
 What a change owes is read off its diff: prose owes no gate and no review; product Go owes the
 selected lanes and one review seat; the record spine, the hot path and the money path add a
@@ -31,7 +34,7 @@ read by the main loop and `make replay-parity` when owed.
 | `skills/working-here` | the process and the change classes |
 | `skills/using-blockchain-kit` | the routing table, given at session start |
 | `skills/` (bot) | `go`, `fork-lookup`, `fork-node-api`, `contract-abi`, `binance-streams`, `record-format`, `replay-parity`, `hot-path-determinism`, `environment-detection` |
-| `skills/` (fork) | `fork-development`, `fork-ext-convention`, `fork-deploy`, `upstream-rebase` |
+| `skills/` (fork) | `fork-development`, `fork-ext-convention`, `fork-deploy`, `campaign`, `upstream-rebase` |
 | `agents/` | `golang-implementer`, `code-reviewer`, `determinism-auditor`, `parity-auditor`, `fork-indexer`, `fixture-capturer`, `infra-profiler`. None runs above opus |
 | `workflows/implement.js` | `blockchain-kit:implement`: Lane → Integrate → Gate → Review → Fix → Re-gate. Its header is the contract of its `args` and its return |
 | `commands/implement.md` | `/blockchain-kit:implement`, the user's entry to the workflow |
@@ -41,12 +44,13 @@ read by the main loop and `make replay-parity` when owed.
 | `bin/bk-gate` | `bk-gate [-C DIR] <name> -- <command>`: one verdict line, the last ten lines on red, the command's exit code |
 | `bin/bk-mainloop-share` | what main-loop turns were spent on, by category: the kit's one metric |
 | `bin/bk-statusline` | the status line: the session (model, context, rate limits, cache, cost) and the place (branch, PR, PROD, the fork pin and checkout, the kit's SHA) |
-| `bin/blockchain-kit-context` | the session-start hook: routing table, pin and checkout lines, the kit's SHA, the host, and what is out of place (git guard unarmed, steering files outside the kit) |
+| `bin/blockchain-kit-context` | the session-start hook, in prediction-bot and in a bsc-geth clone: routing table, pin and checkout lines (prediction-bot only), the kit's SHA, the host, and what is out of place (git guard unarmed, steering files outside the kit) |
 | `bin/blockchain-kit-setup`, `-update` | install and update, `--scope user\|project` |
 | `hooks/guard-secrets` | denies the file tools node identity and account material and the generic secret patterns; fails closed |
-| `hooks/guard-prod-run` | on the production host, denies a bare `replay`, `bot` or collector run that bypasses `scripts/replay-run.sh`; fails closed |
+| `hooks/guard-prod-run` | on the production host, denies a bare `replay`, `bot` or collector run that bypasses `scripts/replay-run.sh`, and, in the fork tree, heavy work (`make test\|lint\|geth-prod`, `go test ./...`, `golangci-lint`, `ci.go test\|lint`) not wrapped by `build/unit_run.py`, `systemd-run` or `verifyconstrained`; fails closed |
 | `hooks/land-shape` | runs a `dev-setup/ci/land` call in the foreground at a 30-minute timeout, with no `timeout` wrapper; fails open |
 | `hooks/workflow-tiers` | refuses a workflow script written in the session whose `agent()` calls leave `model` unset, so no stage inherits the session's tier by omission; fails open |
+| `hooks/implement-args` | fills `project` and `module` into an implement run's args, and refuses the run in a session rooted in the fork (kit #16) |
 | `hooks/gofmt-on-edit` | formats a Go file Claude writes, in the project or the fork checkout |
 | `lib/` | `forkpin.py` (the pin, the module cache, the checkout, `go.work`, the index), `bkhost.py` (the production-host test), `blockchain-kit-homes.sh` (the config home) |
 | `share/mcp-gopls.json` | the `gopls` entry for a repo's `.mcp.json` |
@@ -72,9 +76,10 @@ every repository: each project's install of one kit commit shares one cache dire
 
 ## Enabling it in a project
 
-prediction-bot commits the enablement in `.claude/settings.json`: `extraKnownMarketplaces` names
-this repository, `enabledPlugins` turns the kit on, and `worktree.baseRef` is `"head"` so an
-`implement` lane starts at the run branch and not at `origin/main`. Then, once per clone:
+prediction-bot and bsc-geth (from migration Phase 5 step 3) commit the enablement in
+`.claude/settings.json`: `extraKnownMarketplaces` names this repository, `enabledPlugins` turns
+the kit on, and `worktree.baseRef` is `"head"` so an `implement` lane starts at the run branch
+and not at the default branch's origin tip. Then, once per clone of either:
 
 ```sh
 claude                                     # one interactive start: accept folder trust; the marketplace registers
@@ -103,7 +108,8 @@ Kill switches: `BLOCKCHAIN_KIT_CONTEXT=0`, `BLOCKCHAIN_KIT_GOFMT=0`,
 
 **The gopls MCP server is the repo's**, in its `.mcp.json`, never the plugin's: a server a
 plugin ships is named for the plugin, and the agents are granted `mcp__gopls__<tool>`. The key
-must be exactly `gopls`. gopls answers for the fork checkout only while `go.work` is active.
+must be exactly `gopls`. In a bsc-geth root gopls answers for the fork natively; from
+prediction-bot it answers for the fork checkout only while `go.work` is active.
 
 ## Status line
 
@@ -137,7 +143,7 @@ prediction-bot main +1 ~2 │ PROD │ PR #903 approved │ pin 485bcb1c2c70 │
   never goes stale the way the session-start Host line can.
 - **In prediction-bot:** the pin, with `index STALE` when the index was built elsewhere; the
   fork checkout against the pin (`+N` past it, `~` when dirty); and `go.work: builds the
-  CHECKOUT`.
+  CHECKOUT`. In a bsc-geth root there is no pin: the repo name and branch are the place.
 - **`kit <sha>`:** the kit installed for this project, with `→<sha>` when the marketplace
   has moved past it, which means `blockchain-kit-update` has work to do.
 
@@ -147,6 +153,11 @@ idle. A run takes about 50 ms.
 
 ## Three trees
 
+A session rooted in a bsc-geth clone has one tree, its own: no pin, no index (`bsc-fork`
+exits 2), and nothing to export. It needs only that clone's git guard armed (`make
+dev-setup`), and no other open session using the same clone. The rest of this section is
+prediction-bot's.
+
 | Tree | Where | What it is |
 |---|---|---|
 | the pin | the module cache | read-only. What `go.mod` names, what CI compiles, what the index describes |
@@ -154,8 +165,9 @@ idle. A run takes about 50 ms.
 | what the build compiles | | the pin, unless prediction-bot's `go.work` is active: then the checkout |
 
 An edit in the checkout proves nothing in the bot until `go.work` is on or the pin moves, and
-the index answers for the pin, never for a checkout past it. A session that edits the fork
-needs two things from the shell it starts in:
+the index answers for the pin, never for a checkout past it. A prediction-bot session that
+edits the fork needs two things from the shell it starts in, and a clone no other open
+session has:
 
 ```sh
 export BSC_FORK_PATH=~/Developer/bsc-geth        # the hooks and bsc-fork read it

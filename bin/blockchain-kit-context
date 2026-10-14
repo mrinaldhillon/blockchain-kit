@@ -1,25 +1,31 @@
 #!/usr/bin/env python3
-"""blockchain-kit-context — gives a session in a bsc-geth fork client its routing table.
+"""blockchain-kit-context — gives a session in a bsc-geth fork client, or in the fork, its routing table.
 
 A SessionStart hook (hooks/hooks.json). When the go.mod at or above the session's
-directory replaces go-ethereum with a fork (prediction-bot), it prints, as the hook's
-additionalContext, the body of skills/using-blockchain-kit/SKILL.md and then these
-lines, in this order:
+directory replaces go-ethereum with a fork (the client, prediction-bot), or is the fork
+itself (its module is still github.com/ethereum/go-ethereum: a bsc-geth clone), it
+prints, as the hook's additionalContext, the body of skills/using-blockchain-kit/SKILL.md
+and then these lines, in this order:
 
-  Fork pin: ...         which fork commit go.mod pins, and whether the fork index was
-                        built at it
-  Fork checkout: ...    the bsc-geth checkout this session edits, where it stands
-                        against the pin, and which of the two the build compiles
+  Fork pin: ...         the client only: which fork commit go.mod pins, and whether
+                        the fork index was built at it
+  Fork checkout: ...    the client only: the bsc-geth checkout this session edits,
+                        where it stands against the pin, and which of the two the
+                        build compiles
   blockchain-kit: ...   the kit's own version: `installed at <sha12>` when the kit's
                         directory is named by a 12-hex SHA (a plugin install), else
                         `running from the checkout <kit> at <sha12>` when the kit is
                         the top of a git checkout; omitted when neither holds
   Host: ...             PRODUCTION when the geth IPC path is a unix socket (the
-                        recorder archive is on this host), else dev; lib/bkhost.py
-  Git guard: ...        only when the main-ref guard is off in the client's checkout:
+                        recorder archive is on this host), else dev; lib/bkhost.py.
+                        The client's PRODUCTION line adds that its tests run offline
+                        against fixtures; the fork's does not
+  Git guard: ...        only when the main-ref guard is off in the session's checkout:
                         core.hooksPath unset, its reference-transaction hook missing,
                         or that hook not executable (a relative hooksPath resolves
-                        against the module root). Omitted outside a git work tree
+                        against the module root). The remedy it names is `make tools`
+                        in the client, `make dev-setup` in the fork. Omitted outside
+                        a git work tree
   Stray steering: ...   only when `git ls-files .claude` at the module root lists
                         anything but .claude/settings.json: one line with the count
                         and up to three paths
@@ -29,8 +35,8 @@ drops the others or the table. Every git query has a two second timeout, cut sho
 the whole hook stays inside its five second budget, and a line is capped at 400
 characters, so the context stays under 10,000.
 
-Anywhere else it prints nothing, so a session outside a fork client pays nothing. That
-includes a session started in bsc-geth itself: the fork is developed from its client.
+Anywhere else it prints nothing, so a session outside the client and the fork pays
+nothing.
 
 It never fails a session: anything unexpected prints nothing and exits 0.
 
@@ -87,17 +93,18 @@ def kit_line() -> str:
     return ""
 
 
-def host_line() -> str:
+def host_line(fork: bool) -> str:
     import bkhost
 
     ipc = bkhost.ipc_path()
     if bkhost.prod_host():
-        return (f"Host: PRODUCTION — geth IPC live at {ipc}; the recorder archive is on this host. "
-                "Tests run offline against fixtures.")
+        line = f"Host: PRODUCTION — geth IPC live at {ipc}; the recorder archive is on this host."
+        return line if fork else f"{line} Tests run offline against fixtures."
     return f"Host: dev — no geth IPC at {ipc}."
 
 
-def git_guard_line(root: Path) -> str:
+def git_guard_line(root: Path, fork: bool) -> str:
+    remedy = "make dev-setup" if fork else "make tools"
     inside = git(root, "rev-parse", "--is-inside-work-tree")
     if inside is None or inside.returncode != 0 or inside.stdout.strip() != "true":
         return ""
@@ -107,12 +114,12 @@ def git_guard_line(root: Path) -> str:
     configured = got.stdout.strip() if got.returncode == 0 else ""
     if not configured:
         return ("Git guard: core.hooksPath is unset — the main-ref guard is NOT armed in this checkout; "
-                "run make tools.")
+                f"run {remedy}.")
     directory = Path(configured).expanduser()
     hook = (directory if directory.is_absolute() else root / directory) / GUARD_HOOK
     if not hook.is_file():
         return (f"Git guard: {configured} has no {GUARD_HOOK} hook — the main-ref guard is NOT armed; "
-                "run make tools.")
+                f"run {remedy}.")
     if not os.access(hook, os.X_OK):
         return f"Git guard: {hook} is not executable — git ignores it silently."
     return ""
@@ -130,10 +137,10 @@ def stray_line(root: Path) -> str:
             "blockchain-kit is the one steering home.")
 
 
-def extra_lines(root: Path) -> list[str]:
+def extra_lines(root: Path, fork: bool) -> list[str]:
     """The kit, host, git-guard and stray-steering lines; each one fails alone."""
     out = []
-    for make in (kit_line, host_line, lambda: git_guard_line(root), lambda: stray_line(root)):
+    for make in (kit_line, lambda: host_line(fork), lambda: git_guard_line(root, fork), lambda: stray_line(root)):
         try:
             line = make()
         except Exception:  # noqa: BLE001, S112 - one line that fails never drops the others
@@ -154,10 +161,14 @@ def context(cwd: Path) -> str:
     import forkpin  # here, inside main's try: a broken lib must not fail the session
 
     root = forkpin.module_root(cwd)
-    if root is None or not forkpin.is_client(root):
+    if root is None:
+        return ""
+    fork = forkpin.is_fork(root)
+    if not fork and not forkpin.is_client(root):
         return ""
     text = body(TABLE.read_text(encoding="utf-8"))
-    lines = "\n".join(line for line in (forkpin.summary(root), *extra_lines(root)) if line)
+    pin = "" if fork else forkpin.summary(root)  # the fork has no pin: summary would say nothing
+    lines = "\n".join(line for line in (pin, *extra_lines(root, fork)) if line)
     return f"{text}\n\n{lines}" if lines else text
 
 

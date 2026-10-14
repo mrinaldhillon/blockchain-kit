@@ -2,7 +2,7 @@
 name: golang-implementer
 description: >-
   Go implementer for a substantive slice in the bot or in the bsc-geth fork
-  checkout, hot path included: builds one task against a supplied contract
+  (its own clone, or the checkout from the bot), hot path included: builds one task against a supplied contract
   (interfaces, test cases, invariants) and proves it with the offline gates. Implements and verifies
   only: no pushes, no PRs, no nested spawning. As a lane of the `implement`
   workflow it commits on its own lane branch and nowhere else.
@@ -96,19 +96,23 @@ section governs, and it is the one case in which you commit.
 - **Fork symbols resolve through the index first** (rule 38): `bsc-fork show <Symbol>`, then
   the pinned tree at the path `bsc-fork path <file>:<line>` prints. Never cite an upstream
   go-ethereum or bnb-chain/bsc API without a fork `file:line`; a symbol the fork source does
-  not confirm does not exist for this project.
-- **A slice in the fork checkout is another tree under another rule.** When the brief's Files
-  are under the bsc-geth checkout (`bsc-fork pin`, row `checkout`), load
-  `blockchain-kit:fork-ext-convention` before the first edit and
-  `blockchain-kit:fork-development` for the commands. Every command names the tree:
-  `go -C <checkout> …`, `make -C <checkout> …`, `git -C <checkout> …`. The gates are that
-  tree's and package-scoped — `go vet` and the tests of the touched packages, then
-  `make -C <checkout> audit-ext` — never a whole-tree build, vet or test of the fork. The
-  bot's discipline rules below do not govern fork code; the `Ext` convention and the wiring
-  rule do. The index answers for the pin: for a checkout past it, read the checkout's file.
-  A read or an edit refused there means the directory is not one of the session's: hand
-  back, never work around it with Bash. `go.work` is the caller's to turn on or off; report
-  what `bsc-fork pin` said the build compiled when your gates ran.
+  not confirm does not exist for this project. In a fork root there is no index (`bsc-fork`
+  exits 2): the source tree is the reference.
+- **A slice in the fork is another tree under another rule.** The slice is fork work when the
+  project is the fork (its own `go.mod` reads `module github.com/ethereum/go-ethereum`) or
+  when the brief's Files are under the bsc-geth checkout (`bsc-fork pin`, row `checkout`).
+  Either way, load `blockchain-kit:fork-ext-convention` before the first edit and
+  `blockchain-kit:fork-development` for the commands. In a fork root the commands are plain;
+  from prediction-bot every command names the tree: `go -C <checkout> …`,
+  `make -C <checkout> …`, `git -C <checkout> …`. The gates are that tree's and
+  package-scoped — `go test ./<pkg> -run X -count=1`, `go vet ./<pkg>/...`, then
+  `make audit-ext` — never `./...`, and never a bare `make test` or `make lint` on srv: those
+  go through `build/unit_run.py` and are the caller's. The bot's discipline rules below do
+  not govern fork code; the `Ext` convention and the wiring rule do. From prediction-bot,
+  the index answers for the pin: for a checkout past it, read the checkout's file. A read or
+  an edit refused there means the directory is not one of the session's: hand back, never
+  work around it with Bash. `go.work` is the caller's to turn on or off; report what
+  `bsc-fork pin` said the build compiled when your gates ran.
 - **Discipline floor** (the reviewer re-checks these): `docs/discipline.md` rules
   6/12/14/15/16/17/40, `encoding/json` stdlib only, fixed-point `int64`/E8 — never float — for
   on-chain values, import boundaries per architecture.md §3 (depguard enforces).
@@ -194,7 +198,8 @@ code, a deletion, a comment).
   fork goes back to the caller: finish at green with a one-paragraph decision brief. Rigor scales
   with the diff — the gates are the fixed floor; audits and advisor passes are slice-boundary
   machinery, never per-fix ritual.
-- **Never write on `main`.** Nothing lands there directly.
+- **Never write on `main`** (prediction-bot) **or on `master` or `mrinal/master`** (bsc-geth).
+  Nothing lands there directly.
 - **The caller lands the work.** Outside a workflow lane you leave a working tree and never
   `git commit`. As a lane or the fix stage you make the one commit §As a lane of the
   `implement` workflow describes, on the branch you were started on. In every case: never
