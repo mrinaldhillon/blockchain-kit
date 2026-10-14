@@ -189,7 +189,8 @@ repo, folded into pb `docs/` where not already there. `claude-md-editing`,
 `hook-authoring`: RETIRE; what the kit needs of them is §5.3.
 
 **Commands (9), output style, statusline, `delegation.json`, `agent-blocks/`.** RETIRE,
-except the output style (§5.5). The statusline is the user's own setting.
+except the output style (§5.5). The statusline is the user's setting, which points at the
+kit's `bin/bk-statusline` (README §Status line), since a plugin cannot set `statusLine`.
 
 **Records.** `.claude/decisions/` (61), `.claude/reports/` (11) and `.claude/superpowers/`
 (125 files of plans, specs, ledgers and briefs) are deleted after the consolidation in the
