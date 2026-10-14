@@ -7,8 +7,7 @@ Date 2026-10-01. Implements `docs/design.md` (cited as D§n). Bases: prediction-
 (`b02324d`), pb #903 (`f793dd09`), the tag `steering-final` on `5a23b577`, and C8 (`ci` is the
 only required check). Kit #4 and #5 followed it. Phase 4: the fresh clone
 `~/Developer/prediction-bot` runs the kit at project scope; the other clones have not been
-checked. Phase 5: not started. Phase 6: triaged, and kit #7 is filed; the pb closes wait for
-the operator. Phase 7: not started.
+checked. Phase 5: not started. Phase 6: done on 2026-10-14 (kit #7). Phase 7: not started.
 
 **Style:** contract-first. Each task states what must be true when it is done and how that is
 observed. Bodies are written at execution.
@@ -264,6 +263,9 @@ Done: pb's open issues carry no `steering` label; #7 holds every live row; the c
 closed and kept are in #7. Triage of 2026-10-14, covering all 288 open issues:
 - pb: 14 moved, 4 mixed, 68 obsolete, 10 done, 122 kept;
 - bsc-geth: 0 moved, 70 kept.
+
+The pb writes were applied on the operator's go. The `steering` label is marked retired, not
+deleted, so closed issues keep it. pb #550 is retitled "Engineering tooling — umbrella".
 
 ## Phase 7 — measure
 
