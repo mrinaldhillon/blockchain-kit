@@ -45,6 +45,7 @@ read by the main loop and `make replay-parity` when owed.
 | `bin/blockchain-kit-setup`, `-update` | install and update, `--scope user\|project` |
 | `hooks/guard-secrets` | denies the file tools node identity and account material and the generic secret patterns; fails closed |
 | `hooks/guard-prod-run` | on the production host, denies a bare `replay`, `bot` or collector run that bypasses `scripts/replay-run.sh`; fails closed |
+| `hooks/land-shape` | runs a `dev-setup/ci/land` call in the foreground at a 30-minute timeout, with no `timeout` wrapper; fails open |
 | `hooks/gofmt-on-edit` | formats a Go file Claude writes, in the project or the fork checkout |
 | `lib/` | `forkpin.py` (the pin, the module cache, the checkout, `go.work`, the index), `bkhost.py` (the production-host test), `blockchain-kit-homes.sh` (the config home) |
 | `share/mcp-gopls.json` | the `gopls` entry for a repo's `.mcp.json` |
