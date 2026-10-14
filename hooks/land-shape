@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""PreToolUse (Bash): run prediction-bot's `dev-setup/ci/land` the one cheap way.
+
+A landing is one foreground Bash call, `git push -q && dev-setup/ci/land <PR>`, at a long
+tool timeout (working-here step 6). `land` polls its CI run itself. Inside the timeout,
+its verdict is the call's result: no model request after it beyond the reply. Past the
+timeout the harness moves the call to the background and notifies on exit, which costs one
+more request. So does a call started in the background, whose "started" result is a
+request of its own. A `timeout <n>` wrapper kills `land` mid-run and forces a re-run.
+
+When `dev-setup/ci/land` (or `dev-setup/ci/land.py`, or either through `python3`) is the
+command word of a segment, this hook returns the call's input with
+  - a `timeout [options] <duration>` wrapper directly in front of it removed, unless the
+    command holds a heredoc (`<<`), whose body is text, not commands;
+  - `run_in_background` false;
+  - `timeout` raised to TIMEOUT_MS. Claude Code reduces a value above the session's ceiling
+    to that ceiling; pb's `.claude/settings.json` raises the ceiling with
+    BASH_MAX_TIMEOUT_MS.
+Every other field is carried over as it is. Nothing is printed when nothing changes, for a
+tool other than Bash, or when `land` is only named (`grep land dev-setup/ci/land.py`).
+permissionDecision is left unset, so permission rules judge the rewritten call as usual.
+
+Not a guard: it fails OPEN. An unparseable payload, an unterminated quote or its own bug
+prints nothing and exits 0, and the call runs as Claude sent it.
+
+Env:   BLOCKCHAIN_KIT_LAND_SHAPE=0 turns it off.
+Usage: fed the PreToolUse JSON payload on stdin by hooks/hooks.json.
+Exit:  0, always.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shlex
+import sys
+
+sys.dont_write_bytecode = True
+
+NAME = "land-shape"
+TIMEOUT_MS = 1_800_000  # CI's longest run in the last 60 was 12.1 min (2026-10-14)
+LAND_PATHS = ("dev-setup/ci/land", "dev-setup/ci/land.py")
+PYTHONS = re.compile(r"python3?(\.[0-9]+)?")
+ASSIGN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
+DURATION = re.compile(r"[0-9]+(\.[0-9]+)?[smhd]?")
+TIMEOUT_VALUE_OPTS = frozenset({"-s", "-k", "--signal", "--kill-after"})
+PUNCT = ";&|()<>\n"
+SEPARATORS = frozenset({";", "&", "&&", "||", "|", "|&", "(", ")", "\n"})
+
+
+def words(command: str) -> list[tuple[str, int]]:
+    """(token, offset) pairs. Non-posix shlex keeps every token verbatim, quotes included,
+    so each one is found in the text. Raises ValueError on an unterminated quote."""
+    lex = shlex.shlex(command, posix=False, punctuation_chars=PUNCT)
+    lex.whitespace = " \t\r"
+    lex.whitespace_split = True
+    lex.commenters = ""
+    out, at = [], 0
+    for token in lex:
+        at = command.index(token, at)
+        out.append((token, at))
+        at += len(token)
+    return out
+
+
+def is_land(word: str) -> bool:
+    path = word.strip("'\"")
+    return any(path == p or path.endswith("/" + p) for p in LAND_PATHS)
+
+
+def land_spans(command: str) -> tuple[bool, list[tuple[int, int]]]:
+    """(land runs as a command, the [start, end) spans of `timeout` wrappers right before it)."""
+    toks = words(command)
+    found, spans = False, []
+    i = 0
+    while i < len(toks):
+        while i < len(toks) and toks[i][0] in SEPARATORS:
+            i += 1
+        while i < len(toks) and ASSIGN.match(toks[i][0]):
+            i += 1
+        wrapper = None
+        if i < len(toks) and toks[i][0] == "timeout":
+            wrapper = toks[i][1]
+            i += 1
+            while i < len(toks) and toks[i][0].startswith("-"):
+                i += 2 if toks[i][0] in TIMEOUT_VALUE_OPTS else 1
+            if i < len(toks) and DURATION.fullmatch(toks[i][0]):
+                i += 1
+        wrapped = toks[i][1] if i < len(toks) else len(command)  # where the wrapped command starts
+        if i < len(toks) and PYTHONS.fullmatch(toks[i][0].rsplit("/", 1)[-1]):
+            i += 1
+        if i < len(toks) and is_land(toks[i][0]):
+            found = True
+            if wrapper is not None:
+                spans.append((wrapper, wrapped))
+        while i < len(toks) and toks[i][0] not in SEPARATORS:
+            i += 1
+    return found, spans
+
+
+def shaped(tool_input: dict[str, object]) -> dict[str, object] | None:
+    """The input to run instead, or None when it is already the cheap shape (or no land)."""
+    command = tool_input.get("command")
+    if not isinstance(command, str) or "land" not in command:
+        return None
+    found, spans = land_spans(command)
+    if not found:
+        return None
+    new = dict(tool_input)
+    if spans and "<<" not in command:
+        for start, end in reversed(spans):
+            command = command[:start] + command[end:]
+        new["command"] = command
+    new["run_in_background"] = False
+    timeout = tool_input.get("timeout")
+    if not isinstance(timeout, (int, float)) or timeout < TIMEOUT_MS:
+        new["timeout"] = TIMEOUT_MS
+    same = new["command"] == tool_input["command"] and new.get("timeout") == tool_input.get("timeout")
+    if same and tool_input.get("run_in_background") in (None, False):
+        return None
+    return new
+
+
+def main() -> int:
+    if os.environ.get("BLOCKCHAIN_KIT_LAND_SHAPE") == "0" or sys.stdin.isatty():
+        return 0
+    body = json.load(sys.stdin)
+    if not isinstance(body, dict) or body.get("tool_name") != "Bash":
+        return 0
+    tool_input = body.get("tool_input")
+    if not isinstance(tool_input, dict):
+        return 0
+    new = shaped(tool_input)
+    if new is None:
+        return 0
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": new}}))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as err:  # noqa: BLE001 - shaping fails OPEN: the call runs as sent
+        print(f"{NAME}: left the call as sent: {err}", file=sys.stderr)
+        sys.exit(0)
