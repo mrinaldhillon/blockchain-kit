@@ -2,7 +2,7 @@
 name: code-reviewer
 description: >-
   The one review seat over a merged Go diff in the bot or the bsc-geth fork
-  checkout: correctness of the logic, and the four invariants a prediction-bot
+  (its own clone, or the checkout from the bot): correctness of the logic, and the four invariants a prediction-bot
   diff can break (determinism and replay parity, the record spine, import
   boundaries, hot-path blocking). Read-only; returns findings with severity. Used
   by the `implement` workflow once per run, or dispatched once before a
@@ -44,7 +44,8 @@ scenario.
 - Callers and callees: a new precondition, a changed return shape, a new error value, an
   ordering dependency; for an interface, every implementation.
 - A go-ethereum API in the diff resolves to the pinned fork: `bsc-fork show <Symbol>`. An API
-  with no fork `file:line` does not exist for this project.
+  with no fork `file:line` does not exist for this project. In a fork root there is no index:
+  the tree under review is the reference.
 
 **The four reserved angles.** Each names the document that owns its invariant in prediction-bot.
 Read that section before judging the angle; the document, not this file, is the rule. A diff
@@ -63,11 +64,17 @@ iteration; disk I/O, a lock wait or an unbounded channel send on the hot path; s
 other than by an immutable `atomic.Pointer[T]` swap; a `Removed` field, a `getLogs` call or
 `abigen`; a float for an on-chain value; a non-additive envelope change.
 
-**In the fork checkout** the four angles do not apply. The rule there is the `Ext` convention
-(`blockchain-kit:fork-ext-convention`, which the brief has you load): every fork-added durable
-surface ends in `Ext` and lives in a `*_ext.go` file, and an edit inside an upstream function
-that deletes or restructures an upstream line is a finding. Upstream provenance is settled by
-`git -C <fork> show v1.7.8:<path>`, never by the suffix.
+**In the fork** — the project is the fork (its `go.mod` reads `module
+github.com/ethereum/go-ethereum`) or the diff is in the bsc-geth checkout — the four angles do
+not apply. Two take their place:
+
+- **The `Ext` convention** (`blockchain-kit:fork-ext-convention`, which the brief has you
+  load): every fork-added durable surface ends in `Ext` and lives in a `*_ext.go` file.
+  Upstream provenance is settled by `git show v1.7.8:<path>` (from prediction-bot,
+  `git -C <fork> show …`), never by the suffix.
+- **Rebase cost and landmines**, whose home is the fork's
+  `docs/upstream-rebase-landmines.md`: an edit that deletes or restructures upstream lines,
+  or touches a declaration that doc names, is a finding.
 
 **Pass 2, verify.** Argue against each candidate. Keep it when you can name the inputs or state
 that trigger it and the wrong result, or when the mechanism is real and the trigger depends on

@@ -3,12 +3,12 @@ name: fork-ext-convention
 description: "The fork's Ext marker, *_ext.go placement and make audit-ext."
 ---
 
-**When to load:** Use before editing, adding or renaming any Go code in the bsc-geth fork checkout — the Ext marker on fork-added symbols, fields, tags, TOML keys, flags and RPC methods, the *_ext.go placement rule, the wiring rule for edits inside upstream functions, the provenance check against the upstream tag, and make audit-ext.
+**When to load:** Use before editing, adding or renaming any Go code in the bsc-geth fork (a bsc-geth session's own tree, or the checkout from prediction-bot) — the Ext marker on fork-added symbols, fields, tags, TOML keys, flags and RPC methods, the *_ext.go placement rule, the wiring rule for edits inside upstream functions, the provenance check against the upstream tag, and make audit-ext.
 
-# The fork's `Ext` convention — read this before editing anything in the checkout
+# The fork's `Ext` convention — read this before editing anything in the fork
 
 bsc-geth is a fork of bnb-chain/bsc (base tag `v1.7.8`) kept cheap to rebase. This is the
-single most important rule in that tree. Full spec, in the checkout:
+single most important rule in that tree. Full spec, in the fork tree:
 **`docs/FORK_NAMING_CONVENTION.md`**. It applies to the fork only: prediction-bot's own
 code takes no `Ext` suffix.
 
@@ -41,10 +41,11 @@ code takes no `Ext` suffix.
 
 ## The provenance check
 
-The one recipe; everything else cites it. In the checkout:
+The one recipe; everything else cites it. In a bsc-geth root (from prediction-bot, write
+`git -C "$BSC_FORK_PATH" show …`):
 
 ```sh
-git -C "$BSC_FORK_PATH" show v1.7.8:path/file.go | grep -n '\bSymbol\b'
+git show v1.7.8:path/file.go | grep -n '\bSymbol\b'
 ```
 
 No output means fork-added. If the `v1.7.8` tag is absent in a clone, resolve the base as
@@ -52,16 +53,17 @@ No output means fork-added. If the `v1.7.8` tag is absent in a clone, resolve th
 `git fetch https://github.com/bnb-chain/bsc.git tag v1.7.8 --no-tags`. Never infer
 provenance from the suffix alone — gopls cannot answer it either; it sees HEAD only.
 
-The whole-tree mechanical sweep is `make -C "$BSC_FORK_PATH" audit-ext`
-(`go run ./build/auditext`: placement, both marker directions over declarations *and*
+The whole-tree mechanical sweep is `make audit-ext` (from prediction-bot,
+`make -C "$BSC_FORK_PATH" audit-ext`; `go run ./build/auditext`: placement, both marker directions over declarations *and*
 struct fields, tags and interface methods, and the wiring rule, against the merge-base).
 Run the tool rather than re-deriving the convention by hand.
 
-## Navigating the checkout
+## Navigating the fork
 
-Navigate Go with the `mcp__gopls__*` tools, not text search. gopls answers for the fork
-tree only while prediction-bot's `go.work` is active (`make go.work`); without it the
-fork package it resolves is the pin's, in the module cache.
+Navigate Go with the `mcp__gopls__*` tools, not text search. In a bsc-geth root gopls
+answers for the tree natively. From prediction-bot it answers for the checkout only while
+pb's `go.work` is active (`make go.work`); without it the fork package it resolves is the
+pin's, in the module cache.
 `go_search` locates a symbol, `go_symbol_references` is the only proof for "every
 caller" / "nothing else writes this" / interface satisfaction, `go_file_context` and
 `go_package_api` give signatures and a package's surface before an edit,
@@ -78,4 +80,5 @@ Every `Ext` RPC method, feed field and TOML key is something prediction-bot may 
 Before renaming or removing one, find its consumer in the bot (`internal/nodeapi`,
 `blockchain-kit:fork-node-api`), and change both sides in the same loop
 (`blockchain-kit:fork-development`). The fork index lists what the bot depends on:
-`bsc-fork search <name>`.
+`bsc-fork search <name>`, from prediction-bot. In a bsc-geth session such a change is a bot
+change too: it runs from a prediction-bot session, fork first, then the pin and the bot.

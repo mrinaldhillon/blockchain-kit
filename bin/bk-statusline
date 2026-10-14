@@ -10,7 +10,8 @@ session JSON Claude Code sends on stdin and prints two lines:
             upstream, a rebase or merge in progress · the linked worktree · the branch's
             PR and its review state · PROD when the geth IPC path is a socket (probed on
             every run, lib/bkhost.py) · in a fork client (prediction-bot): the pin, the
-            index against it, the fork checkout against the pin, go.work · the kit
+            index against it, the fork checkout against the pin, go.work; in a bsc-geth
+            root there is no pin, and the repo name and branch are the place · the kit
             installed for this project, and the marketplace commit when it has moved on
 
 A line wider than $COLUMNS drops its least important segments first. A segment that

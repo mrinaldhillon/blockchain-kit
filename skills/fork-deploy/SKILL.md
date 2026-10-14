@@ -26,7 +26,8 @@ things never to do on this node) is in `deploy/production/README.md`; do not res
 
 ## Before changing anything there
 
-Paths are in the checkout; run with `bash "$BSC_FORK_PATH"/deploy/production/…`.
+Paths are in the fork tree. In a bsc-geth root run them as written; from prediction-bot,
+`bash "$BSC_FORK_PATH"/deploy/production/…`.
 
 - **The offline gate is `bash deploy/production/host/tests/run.sh`** — shellcheck,
   fixture-sync, run.sh (banners), the both-manifests lint, verify.sh, install.sh,
