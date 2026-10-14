@@ -144,6 +144,12 @@ repoint_link() { # repoint_link <running-kit-root>
 	target="$(installed_field installPath "$KIT_SCOPE" "$KIT_PROJECT")"
 	[[ -n "$target" && -d "$target" ]] || target="$1"
 	mkdir -p "$KIT_STATE"
+	# A real directory there (a kit cloned to bootstrap setup) would take the link
+	# inside it, and the PATH would keep running the clone.
+	if [[ -d "$KIT_LINK" && ! -L "$KIT_LINK" ]]; then
+		fail_row "$(pad "stable link")" "$KIT_LINK is a directory, not a link: move it aside (mv $KIT_LINK $KIT_LINK.bootstrap) and re-run"
+		return 0
+	fi
 	ln -sfn "$target" "$KIT_LINK"
 	say "  ok     $(pad "stable link") $KIT_LINK -> $target"
 }

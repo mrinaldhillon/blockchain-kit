@@ -157,6 +157,15 @@ class Setup(unittest.TestCase):
                       f"git -C {self.proj} diff -- .claude/settings.json", done.stdout)
         self.assertNotIn("FAIL", done.stdout)
 
+    def test_setup_refuses_a_directory_where_the_link_goes(self):
+        kit = self.tmp / "data/blockchain-kit/kit"
+        kit.mkdir(parents=True)  # a kit cloned there to bootstrap setup
+        done = self.run_tool(SETUP)
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertIn(f"{kit} is a directory, not a link: move it aside", done.stdout)
+        self.assertEqual(list(kit.iterdir()), [])
+        self.assertFalse(kit.is_symlink())
+
     def test_scope_usage_errors_are_2_and_run_nothing(self):
         cases = ((SETUP, "--scope", "project"),  # no --project, and the cwd is no git work tree
                  (UPDATE, "--scope", "project"),
