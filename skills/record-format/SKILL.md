@@ -1,13 +1,9 @@
 ---
 name: record-format
-description: >-
-  Use when writing, reading, framing, or testing the append-only event log —
-  the record codec, CRC, resync and the loss counters, the envelope, EventKind
-  values, NodeReorg and the other infra payloads, the "" recorder-control
-  stream, StreamSeq epochs, or fixture round-trip. Trigger for any work in
-  internal/event, internal/eventlog, a log consumer (replay, datatrust, etl, a
-  cmd tool), or codec/fuzz tests, so framing is never guessed.
+description: "The append-only event log: framing, CRC, envelope, EventKind, StreamSeq."
 ---
+
+**When to load:** Use when writing, reading, framing, or testing the append-only event log — the record codec, CRC, resync and the loss counters, the envelope, EventKind values, NodeReorg and the other infra payloads, the "" recorder-control stream, StreamSeq epochs, or fixture round-trip. Trigger for any work in internal/event, internal/eventlog, a log consumer (replay, datatrust, etl, a cmd tool), or codec/fuzz tests, so framing is never guessed.
 
 # Record format
 

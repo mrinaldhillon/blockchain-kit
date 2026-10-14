@@ -1,11 +1,9 @@
 ---
 name: replay-parity
-description: >-
-  Use when implementing or reasoning about replay, the parity test, determinism,
-  or the replay-parity gate — internal/replay, the trigger/decision determinism
-  checks, a parity golden that moved, or any change that could make replay diverge
-  from live. Trigger before claiming a milestone gate is met.
+description: "Replay, the parity test and the replay-parity gate."
 ---
+
+**When to load:** Use when implementing or reasoning about replay, the parity test, determinism, or the replay-parity gate — internal/replay, the trigger/decision determinism checks, a parity golden that moved, or any change that could make replay diverge from live. Trigger before claiming a milestone gate is met.
 
 # Replay parity (the tested invariant, rule 32)
 

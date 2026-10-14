@@ -1,12 +1,9 @@
 ---
 name: fork-node-api
-description: >-
-  Use for any BSC node interaction — RPC calls, subscriptions, head/block/log/pending
-  streams and feeds, broadcast, block-time, reorg detection, `internal/nodeapi`. The
-  node is a PRIVATE FORK: trigger before citing any go-ethereum/geth/ethclient API
-  or assuming a method exists, and for MilliTimestamp, MixDigest, NodeReorg,
-  SendResultExt.
+description: "The node is a private fork: RPC, subscriptions, broadcast, block time, reorgs, internal/nodeapi."
 ---
+
+**When to load:** Use for any BSC node interaction — RPC calls, subscriptions, head/block/log/pending streams and feeds, broadcast, block-time, reorg detection, `internal/nodeapi`. The node is a PRIVATE FORK: trigger before citing any go-ethereum/geth/ethclient API or assuming a method exists, and for MilliTimestamp, MixDigest, NodeReorg, SendResultExt.
 
 # Node API resolves against the fork, never upstream
 

@@ -1,6 +1,6 @@
 ---
 name: using-blockchain-kit
-description: "What to load, and when, in a Go repo that consumes the bsc-geth fork and develops it: blockchain-kit's skills, agents, commands and the bsc-fork lookup. Given at session start in the main session; load it in a subagent that writes or checks Go."
+description: "The routing table: which kit skill, agent or command to load, and when. A subagent that writes Go loads it."
 ---
 
 # Using blockchain-kit
@@ -22,7 +22,7 @@ over anything here.
 | **Changing the fork itself**: any edit, build, test or commit in the fork checkout; moving the pin | `blockchain-kit:fork-development` |
 | Before editing any Go file in the fork checkout | `blockchain-kit:fork-ext-convention` |
 | Anything under the fork's `deploy/production/`, its `config.toml` or `ExecStart` | `blockchain-kit:fork-deploy` |
-| Moving the fork to a new upstream tag | `blockchain-kit:upstream-rebase` |
+| Moving the fork to a new upstream tag | the user's `/blockchain-kit:upstream-rebase`: not model-invocable |
 | A multi-step change, cutting units, landing; what a change owes by class | `blockchain-kit:working-here` |
 | A Go slice whose contract is written, in the bot or in the fork | the `blockchain-kit:golang-implementer` agent |
 | A product-Go diff about to land that no workflow run reviewed | the `blockchain-kit:code-reviewer` agent, once |

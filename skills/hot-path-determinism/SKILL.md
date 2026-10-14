@@ -1,11 +1,9 @@
 ---
 name: hot-path-determinism
-description: >-
-  Use before editing or reviewing a record-spine or derive/decide package —
-  internal/event, eventlog, trigger, strategy, state, replay, executor — and for
-  any diff that reads a clock, draws a random number, ranges a map into output,
-  blocks on the hot path, or publishes through an atomic pointer.
+description: "Determinism rules for the record spine and the derive and decide packages."
 ---
+
+**When to load:** Use before editing or reviewing a record-spine or derive/decide package — internal/event, eventlog, trigger, strategy, state, replay, executor — and for any diff that reads a clock, draws a random number, ranges a map into output, blocks on the hot path, or publishes through an atomic pointer.
 
 # Hot path + determinism — the parity footguns
 

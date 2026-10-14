@@ -1,7 +1,9 @@
 ---
 name: fork-ext-convention
-description: Use before editing, adding or renaming any Go code in the bsc-geth fork checkout — the Ext marker on fork-added symbols, fields, tags, TOML keys, flags and RPC methods, the *_ext.go placement rule, the wiring rule for edits inside upstream functions, the provenance check against the upstream tag, and make audit-ext.
+description: "The fork's Ext marker, *_ext.go placement and make audit-ext."
 ---
+
+**When to load:** Use before editing, adding or renaming any Go code in the bsc-geth fork checkout — the Ext marker on fork-added symbols, fields, tags, TOML keys, flags and RPC methods, the *_ext.go placement rule, the wiring rule for edits inside upstream functions, the provenance check against the upstream tag, and make audit-ext.
 
 # The fork's `Ext` convention — read this before editing anything in the checkout
 
