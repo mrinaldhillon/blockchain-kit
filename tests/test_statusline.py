@@ -230,6 +230,15 @@ class StatusLine(unittest.TestCase):
         _, place = self.lines(self.at("bot"))
         self.assertIn(f"kit {market[:7]}→{moved[:7]}", place)
 
+    def test_a_session_launched_in_a_subdirectory_finds_its_clones_install(self):
+        self.repo("bot")
+        (self.tmp / "bot/internal/x").mkdir(parents=True)
+        self.install("bot", "e" * 40)
+        status = self.at("bot/internal/x")
+        status["workspace"]["project_dir"] = str(self.tmp / "bot/internal")
+        _, place = self.lines(status)
+        self.assertIn("kit eeeeeee", place)
+
     def test_another_projects_install_is_not_this_ones(self):
         self.repo("bot")
         self.repo("other")

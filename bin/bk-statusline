@@ -377,7 +377,11 @@ def place_line(s: dict, columns: int) -> str:
     if seen and len(seen.splitlines()) == 2:
         top, gitdir = (Path(p) for p in seen.splitlines())
         segments.append((0, safe(repo_segment, s, cwd, top, gitdir)))
-        project = top if project == cwd else project
+        if project == top or top in project.parents:
+            project = top  # an install record names the clone root, not the launch directory
+        else:
+            root = git(project, "rev-parse", "--show-toplevel")
+            project = Path(root.strip()) if root and root.strip() else project
     else:
         segments.append((0, paint(str(cwd).replace(str(Path.home()), "~", 1), BOLD)))
     segments.append((0, safe(host_segment)))
