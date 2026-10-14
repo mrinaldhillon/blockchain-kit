@@ -117,7 +117,7 @@ and branch protection on `main` requires `ci` and `steering`, strict, admins inc
 | Skill | Role |
 |---|---|
 | `using-blockchain-kit` | The routing table, injected at session start. |
-| `working-here` (new) | The process, in at most 120 lines: explore, plan, cut units, run `implement`, adjudicate, land. Replaces `orchestration`, `git-workflow`, `milestone-workflow`, `dev-workflow`, `plan-authoring` and the superpowers pipeline. |
+| `working-here` (new) | The process, in about 120 lines for both repositories: explore, plan, cut units, run `implement`, adjudicate, land. Replaces `orchestration`, `git-workflow`, `milestone-workflow`, `dev-workflow`, `plan-authoring` and the superpowers pipeline. |
 | `go` | Go authoring bindings. Unchanged. |
 | `fork-lookup`, `fork-node-api`, `contract-abi`, `binance-streams`, `record-format`, `replay-parity`, `environment-detection`, `hot-path-determinism` | Routers to pb `docs/`. |
 | `fork-development`, `fork-ext-convention`, `fork-deploy`, `upstream-rebase` | Routers to bsc-geth `docs/`, for both roots (§2), plus pb's pin-and-checkout loop. |
