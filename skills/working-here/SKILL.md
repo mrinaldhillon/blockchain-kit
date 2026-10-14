@@ -19,7 +19,9 @@ anything here.
    in an issue. No plan, spec, ledger or resume file is tracked in either repository.
 2. **Persist open work as issues.** An issue body carries the units still to do, with their
    contracts. A deferral is `gh issue create`, at the moment it is found. Milestone state is
-   `docs/project-context.md`.
+   `docs/project-context.md`. An issue about Claude itself (steering, this kit, a hook, skill,
+   agent or workflow, the harness, model cost) is filed in `mrinaldhillon/blockchain-kit`,
+   never in the repository you are working in (operator, 2026-10-14).
 3. **Cut units.** A unit is `{id, brief, packages, skills?}`:
    - The brief is a contract: the files, the interfaces with exact signatures, the test cases
      with their assertions, the invariants, and what is out of scope. Bodies are the
