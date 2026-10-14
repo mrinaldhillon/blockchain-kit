@@ -58,8 +58,14 @@ this repository, `enabledPlugins` turns the kit on, and `worktree.baseRef` is `"
 
 ```sh
 claude                                     # one interactive start: accept folder trust; the marketplace registers
-blockchain-kit-setup --scope project       # records the install, so headless runs load the kit too
+~/.claude/plugins/marketplaces/blockchain-kit/bin/blockchain-kit-setup --scope project
+                                           # records the install, so headless runs load the kit too
 ```
+
+The first setup runs from the marketplace copy the interactive start registered (under
+`$CLAUDE_CONFIG_DIR` when that is set). After it, `~/.local/share/blockchain-kit/kit` links
+to the installed kit. Do not clone the kit there to bootstrap: setup refuses a directory
+where its link goes.
 
 - A headless run (`claude -p`) in a clone that skipped the second step loads no kit and says
   nothing. The session-start line `blockchain-kit: installed at <sha>` is the signal.
