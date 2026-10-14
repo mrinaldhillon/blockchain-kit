@@ -7,7 +7,9 @@ Date 2026-10-01. Implements `docs/design.md` (cited as D§n). Bases: prediction-
 (`b02324d`), pb #903 (`f793dd09`), the tag `steering-final` on `5a23b577`, and C8 (`ci` is the
 only required check). Kit #4 and #5 followed it. Phase 4: the fresh clone
 `~/Developer/prediction-bot` runs the kit at project scope; the other clones have not been
-checked. Phase 5: not started. Phase 6: done on 2026-10-14 (kit #7). Phase 7: not started.
+checked. Phase 5: in progress on 2026-10-14, rewritten to the 2026-10-09 ruling that
+bsc-geth keeps pb's shape (D§4.2); the kit change serving a bsc-rooted session is step 2.
+Phase 6: done on 2026-10-14 (kit #7). Phase 7: not started.
 
 **Style:** contract-first. Each task states what must be true when it is done and how that is
 observed. Bodies are written at execution.
@@ -24,7 +26,7 @@ agents, skills and the workflow are proven by one live run each, recorded in the
 
 - pb's recorder and the prod host are not touched by any phase. No phase restarts a service.
 - No history rewrite and no force-push without the operator's explicit instruction (phase 5
-  step 3 only).
+  step 5 only).
 - GitHub writes that are not PRs — issue transfer, issue close, branch-protection edit — happen
   only in the phase that names them, after that phase's dry-run list has been shown.
 - The pb tag `steering-final` is created on the commit before the cut and is never moved.
@@ -234,17 +236,38 @@ Done: in every clone a fresh session quotes the kit's pin line.
 
 ## Phase 5 — bsc-geth
 
-1. Facts to `docs/`: what the kit's `features.md` and `landmines.md` say that the fork's
-   `docs/` does not; the kit's copies become pointers.
-2. One commit on `mrinal/dev` deleting `CLAUDE.md`, `.claude/` and, if present, `.mcp.json`.
-   `.githooks/` stays.
-3. Only on the operator's instruction, at the next upstream rebase: commits whose every path
-   is steering are dropped from the stack. The path set is decided then, commit by commit;
-   `.githooks/` and `docs/` commits are not steering.
+bsc-geth keeps pb's shape (D§4.2, decided 2026-10-09), and the fork is developed in its own
+clone or from pb (D§2, decided 2026-10-14). Everything lands on `mrinal/dev`; `mrinal/master`
+is not touched (operator, 2026-10-14).
 
-Done: `git -C "$BSC_FORK_PATH" ls-files .claude CLAUDE.md .mcp.json` prints nothing; a pb
-session with `BSC_FORK_PATH` set completes one fork edit, `make audit-ext` and a pin move
-under the kit's fork skills.
+1. **Facts to bsc-geth `docs/`.** The feature inventory to `docs/fork-features.md`, the v1.8.0
+   landmines to `docs/upstream-rebase-landmines.md` (full inventory:
+   `docs/reviews/2026-10-04-rebase-v180-inventory.md`), the on-host `cmd/campaign` command
+   line to `cmd/campaign/README.md`. The kit's `features.md` and `landmines.md` become
+   pointers.
+2. **The kit serves a bsc-rooted session** (this kit change): the routing table, the
+   context lines and the bsc heavy-work class of `guard-prod-run` in a fork root; skills,
+   agents and `init` for both roots; `implement` refuses a fork-root run; `campaign` skill.
+3. **One commit on `mrinal/dev`:** `.claude/` reduced to `settings.json` (D§4.2), `CLAUDE.md`
+   cut by kind, `.mcp.json` kept, `unit_run.py` moved to `build/`, `.context/README.md`
+   deleted. `.githooks/` stays.
+4. **Per clone:** one interactive start, then `blockchain-kit-setup --scope project` (P5);
+   the untracked steering scratch archived, as in phase 4.
+5. **Operator only, at the next upstream rebase:** commits whose every path is steering are
+   dropped from the stack. The path set is decided then, commit by commit; `.githooks/` and
+   `docs/` commits are not steering.
+
+Done: `git ls-files .claude CLAUDE.md .mcp.json` in the fork prints exactly
+`.claude/settings.json`, `CLAUDE.md`, `.mcp.json`; a fresh session in the fork clone shows the
+routing table and no stray line; a pb session with `BSC_FORK_PATH` still shows its pin and
+checkout lines.
+
+Follow-ups, not in this phase:
+- bsc-geth's Makefile heavy targets refuse an uncapped run on the prod host, so the rule
+  holds without the kit's hook.
+- The `dev.slice` comment, at the next host install.
+- `docs/superpowers/plans/` in bsc-geth consolidated into issues.
+- Kit PR B: the `implement` workflow's in-place fork mode (D§7).
 
 ## Phase 6 — issues
 
@@ -280,8 +303,8 @@ category is the next change to the kit.
 - Phase 1 is prose in pb: revert the PR; the issues it created stay and are harmless.
 - Phase 3: revert the PR and restore `steering` in branch protection. The tag holds the
   layer regardless.
-- Phase 5 step 2: revert the commit. Step 3 has no rollback but the pre-rebase ref, which is
-  kept until the operator releases it.
+- Phase 5 steps 1 to 3: revert the commit or the PR. Step 5 has no rollback but the
+  pre-rebase ref, which is kept until the operator releases it.
 - Phase 6: a closed issue is reopened; a live item of #7 can be refiled in its repo.
 
 ## API-risk register

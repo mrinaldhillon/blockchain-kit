@@ -3,7 +3,7 @@ name: working-here
 description: "How work moves: plan, issues, units, the implement workflow, landing."
 ---
 
-**When to load:** How work moves in prediction-bot and the bsc-geth fork from a Claude session: explore and plan in the session, persist open work as issues, cut briefed units, run the implement workflow, adjudicate its result, land with dev-setup/ci/land. Load before a multi-step change, before cutting units, and before landing.
+**When to load:** How work moves in prediction-bot and in the bsc-geth fork from a Claude session: explore and plan in the session, persist open work as issues, cut briefed units, run the implement workflow, adjudicate its result, land (pb: dev-setup/ci/land; bsc-geth: a push to mrinal/dev). Load before a multi-step change, before cutting units, and before landing.
 
 # Working here
 
@@ -19,9 +19,10 @@ anything here.
    in an issue. No plan, spec, ledger or resume file is tracked in either repository.
 2. **Persist open work as issues.** An issue body carries the units still to do, with their
    contracts. A deferral is `gh issue create`, at the moment it is found. Milestone state is
-   `docs/project-context.md`. An issue about Claude itself (steering, this kit, a hook, skill,
-   agent or workflow, the harness, model cost) is filed in `mrinaldhillon/blockchain-kit`,
-   never in the repository you are working in (operator, 2026-10-14).
+   `docs/project-context.md` (pb) or `docs/PROJECT_CONTEXT.md` (bsc-geth). An issue about
+   Claude itself (steering, this kit, a hook, skill, agent or workflow, the harness, model
+   cost) is filed in `mrinaldhillon/blockchain-kit`, never in the repository you are in
+   (operator, 2026-10-14).
 3. **Cut units.** A unit is `{id, brief, packages, skills?}`:
    - The brief is a contract: the files, the interfaces with exact signatures, the test cases
      with their assertions, the invariants, and what is out of scope. Bodies are the
@@ -30,25 +31,23 @@ anything here.
      that is coupled is one unit.
    - Name the kit skills a unit needs. A subagent gets none by description.
 4. **Run `/blockchain-kit:implement`** when the user asks for it: lanes in worktrees, one
-   merged run branch, the gate, one review, one fix round. It runs in the background and
-   returns `{merged, conflicted, handbacks, stalled, gate, findings, owed, head}`.
+   merged run branch, the gate, one review, one fix round. Its args always carry `project`
+   and `module` (the command says how). It runs in the background and returns
+   `{merged, conflicted, handbacks, stalled, gate, findings, owed, head}`.
 5. **Adjudicate.** Hand-backs are questions for you. A conflicted or stalled lane names what
    it left. Open findings are fixed, deferred to an issue, or accepted, and you say which.
    `owed.parity`: run `make replay-parity` once. `owed.read`: read those diffs yourself.
-6. **Land in one call**, and nothing after it: `git push -q && dev-setup/ci/land <PR>` as
-   foreground Bash with timeout 1800000. pb raises the tool's ceiling to 30 minutes
-   (`BASH_MAX_TIMEOUT_MS`), past the longest CI run (12.1 min of the last 60, 2026-10-14);
-   elsewhere the value is clamped to the ceiling. `land` polls the CI run itself, and its
-   verdict is the call's result: no model request after it beyond your reply. The kit's
-   `land-shape` hook enforces this shape: it drops a `timeout` wrapper, which would kill
-   `land` mid-run, and turns a background start, which costs one more request, into a
-   foreground run. Never wait with `sleep` or a poll loop. `land` waits for the pushed head to
-   reach the PR, runs the lanes the diff selects on it, squash-merges on green, and leaves a
-   clean checkout on `main` at the merge with the branch deleted. The exit code is the
-   verdict: 0 merged, with nothing left to do; 1 red, 3 merged with a cleanup left, 4
-   refused, each said in the last lines. A red is fixed, committed and sent through the same
-   call. Merging needs no confirmation in prediction-bot; a production deploy is a separate
-   decision and is the operator's.
+6. **Land in one call**, and nothing after it. Landing needs no confirmation; a production
+   deploy (a geth restart, a host install) is a separate decision and is the operator's.
+   - prediction-bot: `git push -q && dev-setup/ci/land <PR>`, foreground Bash, timeout 1800000
+     (pb's `BASH_MAX_TIMEOUT_MS`; the longest CI run of the last 60 took 12.1 min, 2026-10-14).
+     `land` waits for the pushed head, runs the lanes the diff selects, squash-merges on green
+     and leaves a clean `main` at the merge; the kit's `land-shape` hook holds the call to that
+     shape. Exit 0 merged, 1 red, 3 merged with a cleanup left, 4 refused, each said in its
+     last lines. A red is fixed, committed and sent through the same call.
+   - bsc-geth: no CI and no `land`. With the class's gate green, `git push origin mrinal/dev`,
+     behind `.githooks/pre-push`. `mrinal/master` is not touched (operator, 2026-10-14):
+     `.githooks/reference-transaction` holds it.
 
 One unit, or a change too small to brief, skips steps 3 to 5: dispatch
 `blockchain-kit:golang-implementer` once, or make a prose or tooling edit yourself.
@@ -58,7 +57,7 @@ can answer for the end (operator, 2026-09-09).
 
 ## What a change owes
 
-The class is read off the diff, and the class decides the ceremony.
+The class is read off the diff and decides the ceremony. The last two rows are bsc-geth's.
 
 | Class | The diff | Gate | Review | Record |
 |---|---|---|---|---|
@@ -66,19 +65,21 @@ The class is read off the diff, and the class decides the ceremony.
 | Tooling | `dev-setup/`, `scripts/`, Makefile, CI workflow, `tools/` | the lanes the selector names | none | none |
 | Product Go | `cmd/`, `internal/` | the lanes the selector names | one seat at merge: the workflow's, or one `blockchain-kit:code-reviewer` dispatch | none |
 | Guarded Go | record spine, hot path, money path | the same, plus `make replay-parity` when owed | the same, and you read the diff | an ADR only when an invariant, a stored-data contract or a boundary changes |
+| Fork Go | `*_ext.go`, and upstream files under the wiring rule | package-scoped gates in a capped unit on srv, then `make audit-ext`; `make lint` before a push | one seat, with the `Ext` and landmine angles | an ADR only for a decision about the node |
+| Host | `deploy/production/` | `bash deploy/production/host/tests/run.sh`; `check-config-ext.sh` and `host/geth-preflight.sh` before a `config.toml` or `ExecStart` change | none | none; the install itself is the operator's |
 
 - **One branch per change, whatever it touches.** Code, its docs and its tooling land together.
 - **A fact has one home, so a change has one edit.** A fact about the code lives in the
   repository's `docs/` and changes in the PR that changes the code. Kit skills route to it.
-- **An ADR records a decision about the product**, in `docs/decisions/`. A prose edit, a tooling
-  change and a change to this kit never get one.
+- **An ADR records a decision about the product**, in `docs/decisions/` (pb) or `docs/adr/`
+  (bsc-geth). A prose edit, a tooling change and a change to this kit never get one.
 - **Nothing is gated twice.** No local composite before the GitHub run. A known-long command
   runs as foreground Bash at the tool's longest timeout, unless other work runs beside it: past
   that timeout the harness moves it to the background and notifies on exit, and a background
-  start costs one more model request.
-- **One gate command, one line:** `bk-gate <name> -- <command>` prints
-  `gate: <name> rc=<n> t=<s>s out=<path>` and, on red, the last ten lines. Never pipe a gate
-  into `tail` or `grep`.
+  start costs one more model request. `build/unit_run.py --wait <slug>` on srv is such a call.
+  Never wait with `sleep` or a poll loop.
+- **One gate command, one line:** `bk-gate <name> -- <command>` prints `gate: <name> rc=<n>
+  t=<s>s out=<path>` and, on red, the last ten lines. Never pipe a gate into `tail` or `grep`.
 
 ## Tiers and dispatch
 
@@ -88,11 +89,10 @@ The class is read off the diff, and the class decides the ceremony.
 - A workflow script written in the session names `model` on every `agent()`: sonnet for
   measurement, git legwork and verification; haiku for a schema or gate check; opus for
   implementation and review. The session's tier is written by name, only for a design or
-  review stage where a wrong judgment is expensive, and is never inherited by omission.
-  This overrides the harness's `workflow-authoring` text, which says "Default to omitting
-  it — the agent inherits the main-loop model": on 2026-10-14 that ran four measurement
-  agents and their verifies at Fable. The kit's `workflow-tiers` hook refuses a script
-  that leaves one unset.
+  review stage where a wrong judgment is expensive, and is never inherited by omission. This
+  overrides the harness's `workflow-authoring` text ("Default to omitting it — the agent
+  inherits the main-loop model"), which on 2026-10-14 ran four measurement agents and their
+  verifies at Fable. The kit's `workflow-tiers` hook refuses a script that leaves one unset.
 - Judgment stays in the session: the plan, a contract, an invariant, the reading of a red
   gate, the decision to land.
 - A dispatch that edits files gets the tree to itself, or its own worktree. Commit before you
@@ -104,10 +104,16 @@ The class is read off the diff, and the class decides the ceremony.
 
 ## The fork
 
-bsc-geth is developed from a prediction-bot session, in the checkout `BSC_FORK_PATH` names.
-Fork units go through the same workflow with `fork` set: serial, on a branch cut from
-`mrinal/dev`, gated by `make audit-ext`. A change that spans both repositories is two runs, the
-fork's first, then the pin move (`blockchain-kit:fork-development`).
+bsc-geth is developed three ways (operator, 2026-10-14; `blockchain-kit:fork-development`):
+
+- **In its own clone**, a session rooted in bsc-geth: node work, landed by step 6's push;
+  `implement` refuses a fork root for now, so dispatch the implementer per unit.
+- **From prediction-bot**, in the clone `BSC_FORK_PATH` names: the workflow with `fork` set,
+  serial, on a branch cut from `mrinal/dev`, gated by `make audit-ext`.
+- **A bot change that needs a fork change** is the second way twice in one pb session: the
+  fork run and its push, the pin move, then the bot run. No teammates, no second session.
+- **One clone per open session:** a pb session's `BSC_FORK_PATH` never names a clone another
+  session has open.
 
 ## On srv
 
@@ -118,5 +124,5 @@ fork's first, then the pin move (`blockchain-kit:fork-development`).
 ## Evidence
 
 Every claim names how it is known: measured (where) or inferred (from what). A node API is
-confirmed against the fork with a `file:line` (`bsc-fork show`). "Cannot" is a claim like any
-other: a failed attempt does not establish it.
+confirmed against the fork with a `file:line` (`bsc-fork show` in prediction-bot, the source
+in bsc-geth). "Cannot" is a claim like any other: a failed attempt does not establish it.
