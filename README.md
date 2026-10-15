@@ -50,7 +50,7 @@ read by the main loop and `make replay-parity` when owed.
 | `hooks/guard-prod-run` | on the production host, denies a bare `replay`, `bot` or collector run that bypasses `scripts/replay-run.sh`, and, in the fork tree, heavy work (`make test\|lint\|geth-prod`, `go test ./...`, `golangci-lint`, `ci.go test\|lint`) not wrapped by `build/unit_run.py`, `systemd-run` or `verifyconstrained`; fails closed |
 | `hooks/land-shape` | runs a `dev-setup/ci/land` call in the foreground at a 30-minute timeout, with no `timeout` wrapper; fails open |
 | `hooks/workflow-tiers` | refuses a workflow script written in the session whose `agent()` calls leave `model` unset, so no stage inherits the session's tier by omission; fails open |
-| `hooks/implement-args` | fills `project` and `module` into an implement run's args, and refuses the run in a session rooted in the fork (kit #16) |
+| `hooks/implement-args` | fills `project` and `module` into an implement run's args from the tree, so the workflow picks its mode (the bot, the fork in place, a fork checkout) whatever the caller passed |
 | `hooks/gofmt-on-edit` | formats a Go file Claude writes, in the project or the fork checkout |
 | `lib/` | `forkpin.py` (the pin, the module cache, the checkout, `go.work`, the index), `bkhost.py` (the production-host test), `blockchain-kit-homes.sh` (the config home) |
 | `share/mcp-gopls.json` | the `gopls` entry for a repo's `.mcp.json` |

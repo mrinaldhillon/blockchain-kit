@@ -142,7 +142,7 @@ pb's other eleven agents are not carried (§6).
 | `guard-prod-run` | PreToolUse, Bash | The binary class of pb `run_guard.py`: on the prod host, deny a bare replay, bot or collector run that bypasses `scripts/replay-run.sh`. Fails closed. Protects the recorder log. The command is classified with `shlex` at command position, not with pb's 787-line `cmdclass`; the residuals are in the hook's header. `run_guard.py`'s second class (heavy local work through `unit_run.py`) is not carried for pb: it is a rule about pb's own runner, and if it is wanted it belongs in the `make` targets it names. For the fork tree it is carried (decided, 2026-10-14), since a bsc-rooted session now runs heavy work beside the production geth: on the prod host, deny an uncapped `make test\|lint\|geth-prod`, a whole-module `go test ./...`, `golangci-lint`, or `go run build/ci.go test\|lint` unless wrapped by `build/unit_run.py`, `systemd-run` or `verifyconstrained`, keyed on the targeted tree (the cwd, or `-C`). |
 | `land-shape` | PreToolUse, Bash | A call that runs pb's `dev-setup/ci/land` runs the one cheap way: a `timeout` wrapper in front of it is removed, it runs in the foreground, and its tool timeout is 1800000 ms (working-here step 6). Rewrites through `updatedInput` and sets no permission decision. Fails open. |
 | `workflow-tiers` | PreToolUse, Workflow | A workflow script written in the session (`script`, or the file at `scriptPath`; a saved workflow called by `name` carries its own tiers and is not inspected) is denied when an `agent()` call leaves `model` unset, naming the line and the call, so no stage inherits the session's tier by omission (working-here, Tiers and dispatch). The script is scanned as text with its literals and comments blanked, not parsed; an options object the text cannot judge (a spread, a call, an expression) is allowed. Fails open: it guards spend, not data. |
-| `implement-args` | PreToolUse, Workflow | A call of the `blockchain-kit:implement` workflow gets `args.project` (the project root) and `args.module` (its `go.mod` module) filled in through `updatedInput` when the caller left them out, so the script's own fork-root check sees the truth; when that module is `github.com/ethereum/go-ethereum` and `fork` is unset or names the project, the call is denied before any lane starts: an in-place fork run is kit #16. Reads the tree, never the session. Fails closed only in a fork root. |
+| `implement-args` | PreToolUse, Workflow | A call of the `blockchain-kit:implement` workflow gets `args.project` (the project root) and `args.module` (its `go.mod` module) filled in through `updatedInput` when the caller left them out, and a `fork` that names the project by another spelling rewritten to the project path, so the script's mode (§7) follows the tree. Reads the tree, never the session. Fails closed only in a fork root, where a run the script could not place would brief bot-shaped lanes on the production host. |
 | `gofmt-on-edit` | PostToolUse | Unchanged. |
 
 Each hook has a kill switch in the `BLOCKCHAIN_KIT_*` family and reads project state through
@@ -236,8 +236,8 @@ worktrees; one review when the lanes merge; no per-lane reviewer and no refuters
 | `branch` | The run branch all lanes merge into. It exists and is checked out in the session's tree. |
 | `head` | The commit of `branch` every lane starts from. |
 | `gate` | The check command for the merged tree, for example `make test-offline PKG=…`. |
-| `fork` | Optional absolute path of the bsc-geth checkout: the units are fork work from pb (S2). `branch` is then the branch checked out there, and `gate` defaults to `make audit-ext`. |
-| `project`, `module` | The absolute project root and the `module` line of its `go.mod`, passed on every run: the script cannot read the filesystem. With `module` `github.com/ethereum/go-ethereum` and `fork` unset or equal to `project`, the run is rooted in the fork itself (S1) and is refused until the in-place fork mode below lands. |
+| `fork` | Optional absolute path of the bsc-geth checkout when the units are fork work from pb (S2): the remote mode below. `branch` is then the branch checked out there. |
+| `project`, `module` | The absolute project root and the `module` line of its `go.mod`, passed on every run (`implement-args` fills them): the script cannot read the filesystem. With `module` `github.com/ethereum/go-ethereum` and `fork` unset or equal to `project`, the run is rooted in the fork itself (S1): the in-place mode below. |
 | `tiers` | Optional per-stage model override (`lane`, `integrate`, `gate`, `review`, `fix`). A tier above opus, by name, is refused. `review: "session"` runs the review seat at the session's tier, and is the only stage that accepts it. |
 
 **Stages:**
@@ -277,16 +277,21 @@ hot path or the money path: the main loop reads those diffs itself before landin
 - A unit whose `packages` intersect the hot-path set gets `hot-path-determinism` in its
   load line. `go` is always loaded.
 - Two units with a package in common are rejected before any lane starts.
-- With `fork`, lanes run one at a time in the fork checkout, each committing on `branch`,
-  which the caller cut from `mrinal/dev`: harness worktrees belong to the session's
-  repository, not the fork. Each lane starts where the last one ended, there is no Integrate
-  stage, and the run stops at the first lane that dies or hands back, because what it left is
-  the next lane's tree. Stage 4's API rule becomes the `Ext` convention and the gate is
-  `make audit-ext`.
-- A run rooted in the fork (S1) is refused today; a session there dispatches the implementer
-  per unit. An in-place fork mode is a pending kit PR: parallel worktree lanes in the fork's
-  own repository, `fork-ext-convention` loaded, package-scoped lane gates, the gate
-  `make audit-ext`, and the `Ext` review rule.
+- Fork work, in either fork mode: `fork-ext-convention` rides on every lane, the gate
+  defaults to `make audit-ext`, stage 4's API rule becomes the `Ext` convention and the
+  rebase landmines, and nothing is owed (`parity` and `read` are pb's).
+- **In place** (S1: `module` is the fork's and `fork` is unset or the project): stages 1 to 5
+  as in pb, the worktrees under the fork's own `.claude/worktrees/`. The lane gates are
+  the unit's exact packages, written out (`go build|vet|test -count=1 ./<pkg>`, then
+  `make audit-ext`), never `./...`, `make test` or `make lint`: the tree is the production
+  host's, and `guard-prod-run` refuses the whole-module forms. The run branch is squashed to
+  its feature commits before the push to `mrinal/dev` (the fork's commit convention); the
+  Integrate merges are not pushed as they stand.
+- **Remote** (S2: `fork` names another tree): lanes run one at a time in the fork checkout,
+  each committing on `branch`, which the caller cut from `mrinal/dev`: harness worktrees
+  belong to the session's repository, not the fork. Each lane starts where the last one
+  ended, there is no Integrate stage, and the run stops at the first lane that dies or hands
+  back, because what it left is the next lane's tree.
 - The script's own decisions are tested without a session: `tests/test_implement.py` answers
   its agents from a scenario. What an agent does with a prompt is the live run.
 - A stage that dies is reported with what it left behind (`stalled`), never as a clean result.
@@ -301,7 +306,7 @@ The main loop does the intelligent work and nothing repetitive:
    Milestone state stays where each repo already keeps it: pb `docs/project-context.md`,
    bsc-geth `docs/PROJECT_CONTEXT.md`.
 3. **Run `/blockchain-kit:implement`** with the units. The run is in the background. In a
-   bsc-geth root it is refused until the in-place fork mode lands (§7).
+   bsc-geth root it runs in place (§7).
 4. **Adjudicate the result**: hand-backs, conflicts, open findings, the owed reads and the
    parity gate.
 5. **Land**: in pb with `dev-setup/ci/land`; in bsc-geth, the gate green, by

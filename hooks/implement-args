@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""PreToolUse (Workflow): tell the implement workflow what the project is, and refuse it in the fork.
+"""PreToolUse (Workflow): tell the implement workflow what the project is.
 
-workflows/implement.js cannot read the filesystem, so it cannot see that a session is
-rooted in the bsc-geth fork itself, where an in-place run is not supported yet. Its own
-refusal reads `args.project` and `args.module`, which only a caller supplies. This hook
-reads them from the disk, so the refusal holds whatever the caller passed.
+workflows/implement.js cannot read the filesystem. It chooses its mode (the bot, the
+bsc-geth fork in place, a fork checkout from the bot) from `args.project` and `args.module`,
+which only a caller supplies; without `module` it runs the bot's shape, whose lane gates
+build the whole module, in whatever tree it is in. This hook reads both from the disk, so
+the mode follows the tree whatever the caller passed or forgot.
 
 It acts on a call whose `tool_input.name` is `blockchain-kit:implement` or `implement`.
 Every other Workflow call, a script or a scriptPath included, passes untouched.
@@ -12,26 +13,20 @@ Every other Workflow call, a script or a scriptPath included, passes untouched.
   project  CLAUDE_PROJECT_DIR, else the git top level (the nearest directory holding
            .git) at or above the payload `cwd`; realpath'd.
   module   the `module` line of the go.mod forkpin.module_root finds at the project.
-  fork     the tree the module root is: is the module github.com/ethereum/go-ethereum.
+  fork     when it names the project or its module root by another spelling (a symlink,
+           a trailing slash, ~), rewritten to the project path: the script compares the
+           two as strings to tell an in-place fork run from a checkout elsewhere.
 
-When the project is the fork and `args.fork` is unset, or names the project or its module
-root (realpaths compared, ~ expanded), the call is denied with the reason the script uses,
-so no lane starts:
-
-  This project is the bsc-geth fork; in-place fork runs are not supported yet (kit #16).
-  Dispatch blockchain-kit:golang-implementer by hand, package-scoped, or run implement
-  from the prediction-bot clone with `fork` set.
-
-Otherwise, when `args` is an object without `project` or `module`, the missing ones are
-filled in and the whole input returned through hookSpecificOutput.updatedInput, as
-hooks/land-shape does; permissionDecision is left unset. A field the caller set is kept,
-and nothing is printed when nothing changes. `args` given as a JSON string is read for
-`fork` and not rewritten. Whether Claude Code applies updatedInput to a Workflow call is
-a live probe, not run here; the deny does not depend on it.
+When `args` is an object, the missing or respelt fields are filled in and the whole input
+returned through hookSpecificOutput.updatedInput, as hooks/land-shape does;
+permissionDecision is never set. A `project` or `module` the caller set is kept, and
+nothing is printed when nothing changes. `args` given as a JSON string is not rewritten.
+Whether Claude Code applies updatedInput to a Workflow call is a live probe, not run here.
 
 Fails closed in one case only: an unparseable payload, or the hook's own bug, while the
 project (CLAUDE_PROJECT_DIR, else the hook's cwd) is the fork: exit 2 with the reason on
-stderr. Anywhere else a failure exits 0 and prints nothing.
+stderr, since the script would otherwise brief bot-shaped lanes in the fork's tree, which
+is the production host's. Anywhere else a failure exits 0 and prints nothing.
 
 Env:   BLOCKCHAIN_KIT_IMPLEMENT_ARGS=0 turns it off.
 Usage: fed the PreToolUse JSON payload on stdin by hooks/hooks.json.
@@ -50,9 +45,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
 NAME = "implement-args"
 WORKFLOWS = frozenset({"blockchain-kit:implement", "implement"})
-REASON = ("This project is the bsc-geth fork; in-place fork runs are not supported yet (kit #16). Dispatch "
-          "blockchain-kit:golang-implementer by hand, package-scoped, or run implement from the prediction-bot "
-          "clone with `fork` set.")
+REASON = ("This project is the bsc-geth fork and the implement workflow could not be told so: without `module` "
+          "it would brief bot-shaped lanes, whole-module gates included, in the fork's tree. Pass `project` "
+          "and `module` (github.com/ethereum/go-ethereum) in args yourself.")
 
 
 def project_root(cwd: str | None) -> Path:
@@ -84,14 +79,6 @@ def same_tree(named: object, *trees: Path | None) -> bool:
     return any(tree is not None and there == tree.resolve() for tree in trees)
 
 
-def deny(reason: str) -> None:
-    print(json.dumps({"hookSpecificOutput": {
-        "hookEventName": "PreToolUse",
-        "permissionDecision": "deny",
-        "permissionDecisionReason": reason,
-    }}))
-
-
 def main() -> int:
     import forkpin
 
@@ -110,21 +97,13 @@ def main() -> int:
     tree, module = module_of(root)
 
     args = tool_input.get("args")
-    given = args
-    if isinstance(args, str):
-        try:
-            given = json.loads(args)
-        except ValueError:
-            given = None
-    fork = given.get("fork") if isinstance(given, dict) else None
-    if module == forkpin.UPSTREAM and (not fork or same_tree(fork, root, tree)):
-        deny(REASON)
-        return 0
-
     if not isinstance(args, dict):
         return 0
     fill = {"project": str(root), "module": module}
     missing = {k: v for k, v in fill.items() if v and not args.get(k)}
+    fork = args.get("fork")
+    if module == forkpin.UPSTREAM and fork and fork != str(root) and same_tree(fork, root, tree):
+        missing["fork"] = str(root)
     if not missing:
         return 0
     new = dict(tool_input)

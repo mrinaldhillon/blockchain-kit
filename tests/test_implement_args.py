@@ -1,9 +1,8 @@
-"""Tests for hooks/implement-args: the implement workflow told what the project is, and
-refused in the bsc-geth fork itself.
+"""Tests for hooks/implement-args: the implement workflow told what the project is.
 
 The hook is driven as a subprocess with a PreToolUse payload on stdin, in temp trees: a
 client (its go.mod replaces go-ethereum) and two fork clones. Whether Claude Code applies
-updatedInput to a Workflow call, and honours the deny, is a live probe, not run here.
+updatedInput to a Workflow call is a live probe, not run here.
 
 Run: tests/run   (or: python3 -m unittest discover -s tests)
 """
@@ -23,9 +22,9 @@ sys.dont_write_bytecode = True
 KIT = Path(__file__).resolve().parent.parent
 HOOK = KIT / "hooks" / "implement-args"
 UPSTREAM = "github.com/ethereum/go-ethereum"
-REASON = ("This project is the bsc-geth fork; in-place fork runs are not supported yet (kit #16). Dispatch "
-          "blockchain-kit:golang-implementer by hand, package-scoped, or run implement from the prediction-bot "
-          "clone with `fork` set.")
+REASON = ("This project is the bsc-geth fork and the implement workflow could not be told so: without `module` "
+          "it would brief bot-shaped lanes, whole-module gates included, in the fork's tree. Pass `project` "
+          "and `module` (github.com/ethereum/go-ethereum) in args yourself.")
 CLIENT_GOMOD = ("module example.com/bot\n\ngo 1.26\n\nrequire github.com/ethereum/go-ethereum v1.16.3\n\nreplace "
                 "github.com/ethereum/go-ethereum => github.com/someone/bsc-geth v0.0.0-20260921040038-a539ea2ca63c\n")
 NODE_GOMOD = f"module {UPSTREAM}\n\ngo 1.24\n"
@@ -71,13 +70,6 @@ class ImplementArgs(unittest.TestCase):
         self.assertEqual(set(decision), {"hookEventName", "updatedInput"})
         return decision["updatedInput"]
 
-    def assertDenied(self, result: tuple[int, str, str], what: str) -> None:
-        rc, out, err = result
-        self.assertEqual((rc, err), (0, ""), what)
-        self.assertTrue(out, f"not denied: {what}")
-        self.assertEqual(json.loads(out), {"hookSpecificOutput": {
-            "hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": REASON}}, what)
-
     def test_a_client_root_gets_project_and_module_filled_in(self):
         new = self.rewritten(self.run_hook(self.call(ARGS, description="run"), self.env(self.bot)))
         self.assertEqual(new, {"name": "blockchain-kit:implement", "description": "run",
@@ -91,25 +83,38 @@ class ImplementArgs(unittest.TestCase):
         both = {**ARGS, "project": "/given", "module": "example.com/given"}
         self.assertEqual(self.run_hook(self.call(both), self.env(self.bot)), (0, "", ""))
 
-    def test_a_fork_root_without_another_fork_is_denied(self):
+    def test_a_fork_root_gets_project_and_module_filled_in(self):
+        # the script reads an in-place fork run off these two; `fork` unset or equal to `project`
         cases = [
-            ("no fork", self.call(ARGS), self.env(self.fork)),
-            ("the bare name", self.call(ARGS, name="implement"), self.env(self.fork)),
-            ("fork names the root", self.call({**ARGS, "fork": self.fork}), self.env(self.fork)),
-            ("fork, trailing slash", self.call({**ARGS, "fork": self.fork + "/"}), self.env(self.fork)),
-            ("fork through a symlink", self.call({**ARGS, "fork": str(self.tmp / "fork-link")}), self.env(self.fork)),
-            ("from a subdirectory cwd", self.call(ARGS, cwd=f"{self.fork}/eth"), self.env()),
-            ("args as a JSON string", self.call(json.dumps(ARGS)), self.env(self.fork)),
-            ("a caller's wrong module", self.call({**ARGS, "module": "example.com/bot"}), self.env(self.fork)),
-            ("no args at all", self.call(), self.env(self.fork)),
+            ("no fork", self.call(ARGS), self.env(self.fork), {}),
+            ("the bare name", self.call(ARGS, name="implement"), self.env(self.fork), {}),
+            ("fork names the root", self.call({**ARGS, "fork": self.fork}), self.env(self.fork), {"fork": self.fork}),
+            ("from a subdirectory cwd", self.call(ARGS, cwd=f"{self.fork}/eth"), self.env(), {}),
+            ("a caller's wrong module is kept", self.call({**ARGS, "module": "example.com/bot"}), self.env(self.fork),
+             {"module": "example.com/bot"}),
         ]
-        for what, stdin, env in cases:
+        for what, stdin, env, kept in cases:
             with self.subTest(case=what):
-                self.assertDenied(self.run_hook(stdin, env), what)
+                new = self.rewritten(self.run_hook(stdin, env))
+                self.assertEqual(new["args"], {**ARGS, "project": self.fork, "module": UPSTREAM, **kept}, what)
+        # `fork` naming the root by another spelling is rewritten to the project path
+        for what, spelt in (("trailing slash", self.fork + "/"), ("a symlink", str(self.tmp / "fork-link")),
+                            ("a subdirectory", f"{self.fork}/eth/..")):
+            with self.subTest(case=what):
+                new = self.rewritten(self.run_hook(self.call({**ARGS, "fork": spelt}), self.env(self.fork)))
+                self.assertEqual(new["args"], {**ARGS, "fork": self.fork, "project": self.fork, "module": UPSTREAM}, what)
+        # nothing to add: nothing printed. A JSON-string args is not rewritten, and no args at all is left alone
+        full = {**ARGS, "fork": self.fork, "project": self.fork, "module": UPSTREAM}
+        self.assertEqual(self.run_hook(self.call(full), self.env(self.fork)), (0, "", ""))
+        self.assertEqual(self.run_hook(self.call(json.dumps(ARGS)), self.env(self.fork)), (0, "", ""))
+        self.assertEqual(self.run_hook(self.call(), self.env(self.fork)), (0, "", ""))
 
-    def test_a_fork_root_with_fork_naming_another_tree_runs(self):
+    def test_a_fork_root_with_fork_naming_another_tree_keeps_it(self):
         new = self.rewritten(self.run_hook(self.call({**ARGS, "fork": self.other}), self.env(self.fork)))
         self.assertEqual(new["args"], {**ARGS, "fork": self.other, "project": self.fork, "module": UPSTREAM})
+        # in the client, `fork` is never touched, whatever it names
+        new = self.rewritten(self.run_hook(self.call({**ARGS, "fork": self.bot + "/"}), self.env(self.bot)))
+        self.assertEqual(new["args"]["fork"], self.bot + "/")
 
     def test_any_other_call_is_untouched(self):
         cases = [
