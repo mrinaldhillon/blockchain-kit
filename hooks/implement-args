@@ -21,7 +21,8 @@ When `args` is an object, the missing or respelt fields are filled in and the wh
 returned through hookSpecificOutput.updatedInput, as hooks/land-shape does;
 permissionDecision is never set. A `project` or `module` the caller set is kept, and
 nothing is printed when nothing changes. `args` given as a JSON string is not rewritten.
-Whether Claude Code applies updatedInput to a Workflow call is a live probe, not run here.
+Claude Code applies updatedInput to a Workflow call (measured 2026-10-15, Claude Code
+2.1.300: a run in the fork clone with `project` and `module` omitted briefed in-place lanes).
 
 Fails closed in one case only: an unparseable payload, or the hook's own bug, while the
 project (CLAUDE_PROJECT_DIR, else the hook's cwd) is the fork: exit 2 with the reason on

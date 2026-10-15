@@ -1,8 +1,8 @@
 """Tests for hooks/implement-args: the implement workflow told what the project is.
 
 The hook is driven as a subprocess with a PreToolUse payload on stdin, in temp trees: a
-client (its go.mod replaces go-ethereum) and two fork clones. Whether Claude Code applies
-updatedInput to a Workflow call is a live probe, not run here.
+client (its go.mod replaces go-ethereum) and two fork clones. That Claude Code applies
+updatedInput to a Workflow call was measured live on 2026-10-15 (kit #19), not here.
 
 Run: tests/run   (or: python3 -m unittest discover -s tests)
 """
