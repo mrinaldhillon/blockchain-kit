@@ -67,7 +67,8 @@ because the machine is not set up, point there.
    (`fork-lookup` and `blockchain-kit:fork-lookup`), and both are paid for. Then Read
    `.claude/settings.json`: `enabledPlugins` names `blockchain-kit@blockchain-kit`,
    `extraKnownMarketplaces` names the kit's repository, and `worktree.baseRef` is `"head"`
-   (without it an `implement` lane starts at the default branch's origin tip). The same holds
+   (the kit's `worktree-create` hook branches a lane from HEAD itself; without the kit the
+   harness would start one at the default branch's origin tip). The same holds
    in both repositories. Report what is missing: list, do not delete or edit.
 8. **Hand back.** One line per step: ok, or what it needs and who does it. `git status
    --short` must be unchanged from before step 1.

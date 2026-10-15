@@ -30,8 +30,8 @@ anything here.
    - Units are independent: no two share a Go package, and none needs another's result. Work
      that is coupled is one unit.
    - Name the kit skills a unit needs. A subagent gets none by description.
-4. **Run `/blockchain-kit:implement`** when the user asks for it: lanes in worktrees, one
-   merged run branch, the gate, one review, one fix round. Its args always carry `project`
+4. **Run `/blockchain-kit:implement`** when the user asks for it: lanes in worktrees beside
+   the clone (never inside it), one merged run branch, the gate, one review, one fix round. Its args always carry `project`
    and `module` (the command says how). It runs in the background and returns
    `{merged, conflicted, handbacks, stalled, gate, findings, owed, head}`.
 5. **Adjudicate.** Hand-backs are questions for you. A conflicted or stalled lane names what
@@ -109,7 +109,7 @@ The class is read off the diff and decides the ceremony. The last two rows are b
 bsc-geth is developed three ways (operator, 2026-10-14; `blockchain-kit:fork-development`):
 
 - **In its own clone**, a session rooted in bsc-geth: node work, landed by step 6's push.
-  `implement` runs in place: worktree lanes in the clone, package-scoped gates, `make
+  `implement` runs in place: worktree lanes beside the clone, package-scoped gates, `make
   audit-ext`; the whole-module gates stay out of a lane (the tree is the production host's).
 - **From prediction-bot**, in the clone `BSC_FORK_PATH` names: the workflow with `fork` set,
   serial, on a branch cut from `mrinal/dev`, gated by `make audit-ext`.

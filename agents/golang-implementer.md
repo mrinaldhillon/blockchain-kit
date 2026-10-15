@@ -210,8 +210,8 @@ code, a deletion, a comment).
   `gh api`). A dispatch brief cannot widen that, so never plan around an authorization line.
   Read-only `git` and `gh` queries are fine.
 - **Not yours to touch:** plans, decision records, docs prose, the project's Claude
-  configuration (`.claude/settings.json`; a lane's own worktree under `.claude/worktrees/` is
-  its tree, not configuration), deployment config,
+  configuration (`.claude/settings.json`; a lane's own worktree, which the kit puts beside the
+  clone, is its tree, not configuration), deployment config,
   `go.mod` / `go.sum`, or anything outside the task's stated scope. A dependency the contract
   needs and the module does not have is a hand-back, not a `go get`.
 - **Turn envelope: ~50 turns, the default — not caller-optional.** Spend is dominated by

@@ -20,8 +20,6 @@ is the header of `workflows/implement.js`; the process around it is `blockchain-
    - `git branch --show-current` is the run branch: in prediction-bot not `main`; in bsc-geth
      `mrinal/dev` or a branch cut from it, never `master` or `mrinal/master`.
    - `git status --porcelain --untracked-files=no` prints nothing.
-   - `.claude/settings.json` sets `worktree.baseRef` to `"head"` (Read it). Without it a lane
-     starts at `origin/main` and the workflow drops it.
    - `git rev-parse HEAD` is the `head` you pass.
 3. **The gate** is the offline check scoped to the units' packages, for example
    `make test-offline PKG='./internal/feeds/... ./internal/state/...'`. Never
@@ -39,7 +37,10 @@ is the header of `workflows/implement.js`; the process around it is `blockchain-
    `github.com/ethereum/go-ethereum` and `fork` is unset or equals `project`: worktree lanes in
    this clone, package-scoped gates); or a fork checkout from the bot (`fork` names another
    tree: serial). The kit's `implement-args` hook fills `project` and `module` from the tree
-   when they are left out. The run is in the background: do not poll it.
+   when they are left out. A lane's worktree is made by the kit's `worktree-create` hook
+   beside the clone, `<parent>/.<clone>.worktrees/wf_<run>-<n>`, from the session's HEAD;
+   nothing is written under the clone's `.claude/`. The run is in the background: do not
+   poll it.
 5. **When it returns**, adjudicate; nothing is pushed and no PR exists yet. In bsc-geth the
    landing squashes the run branch to its feature commits before the push (`working-here`).
    - `handbacks`: answer the question, then re-run that unit alone.

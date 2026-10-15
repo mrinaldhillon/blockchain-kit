@@ -51,7 +51,9 @@ read by the main loop and `make replay-parity` when owed.
 | `hooks/land-shape` | runs a `dev-setup/ci/land` call in the foreground at a 30-minute timeout, with no `timeout` wrapper; fails open |
 | `hooks/workflow-tiers` | refuses a workflow script written in the session whose `agent()` calls leave `model` unset, so no stage inherits the session's tier by omission; fails open |
 | `hooks/implement-args` | fills `project` and `module` into an implement run's args from the tree, so the workflow picks its mode (the bot, the fork in place, a fork checkout) whatever the caller passed |
-| `hooks/gofmt-on-edit` | formats a Go file Claude writes, in the project or the fork checkout |
+| `hooks/worktree-create` | makes every harness worktree (a workflow lane, `claude -w`, EnterWorktree) beside the clone at `<parent>/.<clone>.worktrees/<name>`, never inside it, on `worktree-<name>` from the session's HEAD; refuses a parent inside a repository or a target that exists |
+| `hooks/worktree-remove` | removes a worktree the kit made when the harness retires it, uncommitted work refused and kept, then deletes its branch when merged |
+| `hooks/gofmt-on-edit` | formats a Go file Claude writes, in the project, a worktree of it, or the fork checkout |
 | `lib/` | `forkpin.py` (the pin, the module cache, the checkout, `go.work`, the index), `bkhost.py` (the production-host test), `blockchain-kit-homes.sh` (the config home) |
 | `share/mcp-gopls.json` | the `gopls` entry for a repo's `.mcp.json` |
 | `tests/run` | the hermetic suite: `bin/`, `lib/`, the hooks, and the workflow script against scripted agents |
@@ -78,8 +80,8 @@ every repository: each project's install of one kit commit shares one cache dire
 
 prediction-bot and bsc-geth (from migration Phase 5 step 3) commit the enablement in
 `.claude/settings.json`: `extraKnownMarketplaces` names this repository, `enabledPlugins` turns
-the kit on, and `worktree.baseRef` is `"head"` so an `implement` lane starts at the run branch
-and not at the default branch's origin tip. Then, once per clone of either:
+the kit on, and `worktree.baseRef` is `"head"` (the kit's `worktree-create` hook branches a lane
+from HEAD itself; the setting covers a session without the kit). Then, once per clone of either:
 
 ```sh
 claude                                     # one interactive start: accept folder trust; the marketplace registers
