@@ -51,10 +51,12 @@ export const meta = {
 //              mrinal/dev and checked out. No Integrate stage; the fork gate, skills and
 //              review rule as in place.
 //
-// Without `module`, in place is never chosen and the run logs so. The project's
-// .claude/settings.json must set worktree.baseRef to "head": under the default a lane
-// starts at origin/<default-branch>, and the start check drops it. A change that spans
-// the fork and the bot is two runs, the fork's first.
+// Without `module`, in place is never chosen and the run logs so. A lane's worktree is
+// made by the kit's worktree-create hook beside the clone (<parent>/.<clone>.worktrees/
+// wf_<run>-<n>, branch worktree-wf_<run>-<n>) from the session tree's HEAD; the start
+// check drops a lane that starts anywhere else. The harness keeps a hook-made worktree
+// when its agent ends: Integrate removes the merged lanes' and reports the rest under
+// `unclaimed`. A change that spans the fork and the bot is two runs, the fork's first.
 //
 // Nothing is pushed and no PR is opened. `make replay-parity` is never run here:
 // `owed.parity` tells the caller to run it once.
@@ -255,7 +257,7 @@ const lanePrompt = (unit, startAt) =>
     ? `This is a serial fork run. Work in ${remote} on branch ${branch}, which is checked out there. ` +
       `\`${git} rev-parse HEAD\` must print ${startAt} before your first edit. Commit on that branch with ${git}. ` +
       `A hand-back commits nothing and leaves the tree as you found it.\n\n`
-    : `You are in your own git worktree on a branch the harness named. \`git rev-parse HEAD\` must print ${startAt} ` +
+    : `You are in your own git worktree, beside the clone, on a branch named for it. \`git rev-parse HEAD\` must print ${startAt} ` +
       `before your first edit. Other lanes are implementing other units in other worktrees: ` +
       (pkgsOf(unit).length ? `your packages are ${pkgsOf(unit).join(', ')} and nothing outside them is yours. ` : `touch only what the brief names. `) +
       `Never touch go.mod or go.sum.\n\n`) +
@@ -317,7 +319,7 @@ for (const { unit, out, startAt, notStarted } of lanes) {
       left: remote ? `possibly uncommitted edits in ${remote} on ${branch}` : 'possibly a worktree and a worktree-wf_* branch: see `unclaimed`',
     })
   } else if (!sameSha(out.start, startAt)) {
-    stalled.push({ unit: id, stage: 'Lane', reason: `started at ${out.start}, not ${startAt} — dropped (worktree.baseRef must be "head")`, branch: out.branch, sha: out.sha })
+    stalled.push({ unit: id, stage: 'Lane', reason: `started at ${out.start}, not ${startAt} — dropped (a lane branches from the session's HEAD: the kit's worktree-create hook)`, branch: out.branch, sha: out.sha })
   } else if (out.handback) {
     handbacks.push({ unit: id, branch: out.branch, sha: out.sha, handback: out.handback })
   } else if ((out.gates || []).some((g) => g.rc !== 0)) {
@@ -358,8 +360,9 @@ if (!remote) {
         `3. For every lane you merged: find its worktree in \`git worktree list --porcelain\` (the entry whose ` +
         `branch is refs/heads/<branch>), \`git worktree remove <path>\`, then \`git branch -d <branch>\`. Leave ` +
         `the worktree and the branch of a lane you did not merge.\n` +
-        `4. From \`git worktree list --porcelain\`, report under unclaimed every worktree under .claude/worktrees/ ` +
-        `whose branch is none of: ${known.join(', ') || '(none)'}.\n` +
+        `4. From \`git worktree list --porcelain\`, report under unclaimed every worktree whose branch name starts ` +
+        `with worktree-wf_ and is none of: ${known.join(', ') || '(none)'}. Wherever it is on disk: the kit puts a ` +
+        `lane beside the clone, not inside it.\n` +
         `5. Return merged (unit ids, in order), conflicted, head (\`git rev-parse HEAD\`) and unclaimed.\n\n` +
         `Lanes:\n${mergeable.map((m, i) => `  ${i + 1}. unit ${m.unit} — branch ${m.branch} — commit ${m.sha}`).join('\n')}`,
       { label: 'integrate', phase: 'Integrate', ...modelOf('integrate'), effort: 'low', schema: INTEGRATE },

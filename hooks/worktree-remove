@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""WorktreeRemove: remove a worktree that worktree-create made, and its branch.
+
+Claude Code calls this when it retires a worktree the WorktreeCreate hook created: the end
+of a `claude -w` session, EnterWorktree's exit, a deleted background session. Not for a
+workflow lane or an isolated agent: the harness keeps those, and the implement workflow's
+Integrate removes the merged ones. Exit 0 means removed; the harness reads nothing else,
+so the directory must be gone.
+
+  accepts  a linked worktree of the clone at <parent>/.<clone>.worktrees/<name> or at the
+           harness's own <clone>/.claude/worktrees/<name> (the kill switch's location).
+  does     `git worktree remove <path>` (never --force: a worktree with uncommitted work
+           or untracked files is refused and kept, exit 2, the reason on stderr; the
+           harness's own check does not see work in a hook-created worktree), then
+           `git branch -d <branch>`. A branch not merged anywhere is kept and named on
+           stderr, exit 0: the directory is gone, the commits are not.
+
+Refuses, exit 2, the directory untouched: a path that is not a linked worktree of its
+clone, one outside the two directories above, an unparseable payload.
+
+Env:   BLOCKCHAIN_KIT_WORKTREES is read by worktree-create only; removal honours both locations.
+Usage: fed the WorktreeRemove JSON payload on stdin by hooks/hooks.json.
+Exit:  0 removed · 2 refused, the worktree kept.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
+NAME = "worktree-remove"
+
+
+def main() -> int:
+    import bkworktree as wt
+
+    body = json.load(sys.stdin)
+    if not isinstance(body, dict):
+        raise wt.WorktreeError("the payload is not an object")
+    given = body.get("worktree_path")
+    if not isinstance(given, str) or not given:
+        raise wt.WorktreeError("no worktree_path")
+    path = wt.real(given)
+    if not path.is_dir():
+        raise wt.WorktreeError(f"{path} is not a directory")
+    main_clone = wt.main_clone(path)
+    branch = wt.owned(main_clone, path)
+    wt.git(main_clone, "worktree", "remove", str(path))
+    if branch:
+        try:
+            wt.git(main_clone, "branch", "-d", branch)
+        except wt.WorktreeError as err:
+            print(f"{NAME}: {path} removed; branch {branch} kept: {err}", file=sys.stderr)
+            return 0
+    print(f"{NAME}: {path} removed" + (f", branch {branch} deleted" if branch else ""), file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as err:  # noqa: BLE001 - a refusal keeps the worktree
+        print(f"{NAME}: refused: {err}", file=sys.stderr)
+        sys.exit(2)

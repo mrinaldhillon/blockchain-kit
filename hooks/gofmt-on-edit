@@ -3,8 +3,9 @@
 
 Scope is deliberately narrow: `tool_input.file_path` must end in `.go` AND
 resolve (symlinks included) under ${CLAUDE_PROJECT_DIR} (the client, or a bsc-geth
-clone the session is rooted in) or under the bsc-geth checkout the client edits
-($BSC_FORK_PATH, or the one its go.work uses). An
+clone the session is rooted in), under a linked worktree of that clone (a lane of the
+implement workflow sits beside the clone, not inside it: hooks/worktree-create), or under
+the bsc-geth checkout the client edits ($BSC_FORK_PATH, or the one its go.work uses). An
 edit anywhere else and an edit to anything that is not Go are both no-ops.
 Inside the scope the file is formatted in place with `<gofmt> -l -w <file_path>`
 and nothing is said; a formatter that exits non-zero or is absent surfaces ONE
@@ -53,6 +54,27 @@ def under(target: Path, tree: Path) -> bool:
     return root == real or root in real.parents
 
 
+def same_repository(target: Path, project: Path) -> bool:
+    """True when the checkout holding `target` shares its git common dir with `project`:
+    a linked worktree of the project, wherever it is on disk."""
+    def common(tree: Path) -> Path | None:
+        try:
+            done = subprocess.run(["git", "-C", str(tree), "rev-parse", "--git-common-dir"], capture_output=True,
+                                  text=True, timeout=3, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        if done.returncode != 0:
+            return None
+        out = done.stdout.strip()
+        return Path(os.path.realpath(out if os.path.isabs(out) else tree / out))
+
+    where = target.parent if target.parent.is_dir() else None
+    if where is None:
+        return False
+    theirs, ours = common(where), common(project)
+    return theirs is not None and theirs == ours
+
+
 def fork_checkout(project: Path) -> Path | None:
     """The bsc-geth checkout `project` edits, None when it names none or is no fork client."""
     import forkpin  # here, inside main's try: a broken lib must not break the edit
@@ -99,7 +121,7 @@ def main() -> int:
     if not project:
         return 0
     target = Path(file_path)
-    if not under(target, Path(project)):
+    if not under(target, Path(project)) and not same_repository(target, Path(project)):
         fork = fork_checkout(Path(project))
         if fork is None or not under(target, fork):
             return 0

@@ -360,6 +360,27 @@ class Kit(unittest.TestCase):
             self.assertEqual((done.returncode, done.stdout, done.stderr), (0, "", ""))
         self.assertEqual(Path(f"{recorder}.calls").read_text(), f"-l -w {inside}\n")
 
+    def test_gofmt_formats_a_go_file_in_a_worktree_of_the_project(self):
+        git_env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+                   "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+        repo = self.tmp / "repo"
+        repo.mkdir()
+        for args in (["init", "-q", "-b", "main"], ["commit", "-q", "--allow-empty", "-m", "one"],
+                     ["worktree", "add", "-q", str(self.tmp / ".repo.worktrees/wf_run-1")]):
+            subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env={**os.environ, **git_env})
+        (self.tmp / ".repo.worktrees/wf_run-1/pkg").mkdir()
+        lane, other = self.tmp / ".repo.worktrees/wf_run-1/pkg/a.go", self.tmp / "notes/a.go"
+        (self.tmp / "notes").mkdir(exist_ok=True)
+        recorder = self.tmp / "fmt"
+        recorder.write_text('#!/bin/sh\necho "$@" >>"$0.calls"\n')
+        recorder.chmod(0o755)
+        for path in (lane, other):
+            call = json.dumps({"hook_event_name": "PostToolUse", "tool_name": "Edit", "tool_input": {"file_path": str(path)}})
+            done = subprocess.run([str(GOFMT)], input=call, capture_output=True, text=True, timeout=30, check=False,
+                                  env=self.env(CLAUDE_PROJECT_DIR=str(repo), BLOCKCHAIN_KIT_GOFMT_BIN=str(recorder)))
+            self.assertEqual((done.returncode, done.stdout, done.stderr), (0, "", ""))
+        self.assertEqual(Path(f"{recorder}.calls").read_text(), f"-l -w {lane}\n")
+
     def test_gofmt_formats_a_go_file_in_the_fork_checkout_the_project_names(self):
         recorder = self.tmp / "fmt"
         recorder.write_text('#!/bin/sh\necho "$@" >>"$0.calls"\n')

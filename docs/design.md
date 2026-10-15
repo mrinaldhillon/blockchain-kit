@@ -72,9 +72,9 @@ Consequences:
 | File | Content |
 |---|---|
 | `CLAUDE.md` | Project facts only: what the project is, the commands table, architecture at a glance, the non-negotiable invariants, the environment rule, the standard of evidence, the operator authorizations (merge without asking, privileged prod commands, where to ask), the map of docs. No line cap (operator, 2026-10-03): a passage stays if a session needs it on every turn, and goes if it is redundant, verbose commentary, history, or belongs elsewhere. No routing, tiers, hooks, rotation or pipeline text. One line names blockchain-kit as the steering home. |
-| `.claude/settings.json` | `extraKnownMarketplaces` (the kit's git repo, as `{"source":"github","repo":"mrinaldhillon/blockchain-kit"}`), `enabledPlugins` (the kit on; nothing else listed), `worktree.baseRef: "head"` (§7 depends on it: the default `fresh` starts a lane at `origin/main` — measured), `env` (`GOPRIVATE`, `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`, and `BASH_MAX_TIMEOUT_MS=1800000`, so one foreground `land` call outlasts the longest CI run), `enabledMcpjsonServers`, and a `permissions.allow` list trimmed to what remains. No `hooks`, `statusLine`, `outputStyle` or `skillOverrides`. Keys in the order the plugin CLI writes them — `$schema`, `env`, `enabledMcpjsonServers`, `worktree`, `enabledPlugins`, `extraKnownMarketplaces` as observed, with the plugin keys last — so a per-clone install leaves no diff (measured: `plugin install --scope project` rewrites the file). |
+| `.claude/settings.json` | `extraKnownMarketplaces` (the kit's git repo, as `{"source":"github","repo":"mrinaldhillon/blockchain-kit"}`), `enabledPlugins` (the kit on; nothing else listed), `worktree.baseRef: "head"` (kept for a session without the kit: the default `fresh` starts a lane at `origin/main`, measured; with the kit, `worktree-create` branches from HEAD itself), `env` (`GOPRIVATE`, `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1`, and `BASH_MAX_TIMEOUT_MS=1800000`, so one foreground `land` call outlasts the longest CI run), `enabledMcpjsonServers`, and a `permissions.allow` list trimmed to what remains. No `hooks`, `statusLine`, `outputStyle` or `skillOverrides`. Keys in the order the plugin CLI writes them — `$schema`, `env`, `enabledMcpjsonServers`, `worktree`, `enabledPlugins`, `extraKnownMarketplaces` as observed, with the plugin keys last — so a per-clone install leaves no diff (measured: `plugin install --scope project` rewrites the file). |
 | `.mcp.json` | The pyright server loses its `-p .claude/pyrightconfig.json` argument: with the overlay gone the server exits on it (measured). Otherwise unchanged. The `gopls` and `pyright` servers start the repo's pinned binaries under `dev-setup/`, and the key `gopls` keeps the tool names `mcp__gopls__*` that the kit's agents are granted. |
-| `.gitignore` | Gains `.claude/worktrees/`: lane worktrees live there and the rule that ignores them today is `.claude/.gitignore`, which the cut deletes (measured). |
+| `.gitignore` | Gains `.claude/worktrees/`: the harness's own location for a lane worktree, and the rule that ignored it before the cut was `.claude/.gitignore`, which the cut deletes (measured). Since kit #21 the kit's `worktree-create` hook puts every worktree beside the clone instead; the rule stays for a session without the kit. |
 | `docs/decisions/` | One new engineering ADR: this repo carries no steering layer; its home is blockchain-kit. |
 | `dev-setup/` | Gains the land script (§4.3). |
 
@@ -143,7 +143,9 @@ pb's other eleven agents are not carried (§6).
 | `land-shape` | PreToolUse, Bash | A call that runs pb's `dev-setup/ci/land` runs the one cheap way: a `timeout` wrapper in front of it is removed, it runs in the foreground, and its tool timeout is 1800000 ms (working-here step 6). Rewrites through `updatedInput` and sets no permission decision. Fails open. |
 | `workflow-tiers` | PreToolUse, Workflow | A workflow script written in the session (`script`, or the file at `scriptPath`; a saved workflow called by `name` carries its own tiers and is not inspected) is denied when an `agent()` call leaves `model` unset, naming the line and the call, so no stage inherits the session's tier by omission (working-here, Tiers and dispatch). The script is scanned as text with its literals and comments blanked, not parsed; an options object the text cannot judge (a spread, a call, an expression) is allowed. Fails open: it guards spend, not data. |
 | `implement-args` | PreToolUse, Workflow | A call of the `blockchain-kit:implement` workflow gets `args.project` (the project root) and `args.module` (its `go.mod` module) filled in through `updatedInput` when the caller left them out, and a `fork` that names the project by another spelling rewritten to the project path, so the script's mode (§7) follows the tree (Claude Code applies `updatedInput` to a Workflow call: measured 2026-10-15). Reads the tree, never the session. Fails closed only in a fork root, where a run the script could not place would brief bot-shaped lanes on the production host. |
-| `gofmt-on-edit` | PostToolUse | Unchanged. |
+| `worktree-create` | WorktreeCreate | Replaces the harness's `git worktree add` for every worktree it isolates work in (a workflow lane, an agent with `isolation: "worktree"`, `claude -w`, EnterWorktree, a background session): the worktree goes to `<parent of the main clone>/.<clone dir>.worktrees/<name>` on branch `worktree-<name>`, cut from the HEAD of the tree the session is in, and the hook prints the path. Keyed on the main clone (git's common dir), so a lane spawned from a `-w` session lands beside the clone too. Why (operator, 2026-10-15): the harness's `<clone>/.claude/worktrees/` puts full checkouts inside the session's own tree, where every walker that ignores `.gitignore` (bsc's `make fmt` runs gofmt over `find .`), gopls and the ignore rules of both repos have to allow for them, and a bsc lane is 13,500 files inside the production host's tree. The harness's `worktree.baseRef` and `.worktreeinclude` do not apply to a hook-made worktree; neither repo uses the latter, and a bot lane compiling the pin, not `go.work`, is by design. Refuses (exit 2, the harness then fails the creation): a name that is not a slug, a target that exists, a parent inside a git repository (Claude Code refuses such a worktree itself), a `.<clone>.worktrees/` holding anything that is not a worktree of the clone. `BLOCKCHAIN_KIT_WORKTREES=0` uses the harness's location with the same branch and HEAD rules. The CLI has no setting for this: `worktree.location` is read by the desktop app for SSH sessions only, and the path is a hardcoded join in the binary (2.1.300). |
+| `worktree-remove` | WorktreeRemove | Removes a worktree `worktree-create` made when the harness retires it (`claude -w` exit, EnterWorktree's exit, a deleted background session; the harness does not call it for a workflow lane or an isolated agent, which it keeps, so §7's Integrate removes the merged lanes itself). `git worktree remove` without `--force`, so uncommitted work is refused and kept (the harness's own check sees none in a hook-made worktree), then `git branch -d`; an unmerged branch is kept and named on stderr. Refuses anything that is not a linked worktree of the clone in one of the kit's two locations. |
+| `gofmt-on-edit` | PostToolUse | Scope gains a linked worktree of the project (a lane beside the clone shares its git common dir). Otherwise unchanged. |
 
 Each hook has a kill switch in the `BLOCKCHAIN_KIT_*` family and reads project state through
 `CLAUDE_PROJECT_DIR`; anything it persists goes under `CLAUDE_PLUGIN_DATA` (docs).
@@ -243,9 +245,10 @@ worktrees; one review when the lanes merge; no per-lane reviewer and no refuters
 **Stages:**
 
 1. **Lane**, one per unit, concurrent, each in its own worktree, `golang-implementer` at
-   opus. The harness creates the worktree at `<project>/.claude/worktrees/wf_<run>-<n>` on a
-   branch it names `worktree-wf_<run>-<n>`, cut from the session's HEAD (measured, under
-   `worktree.baseRef: "head"`). The lane reports its start SHA, implements the brief, runs
+   opus. The kit's `worktree-create` hook (§5.3) makes the worktree at
+   `<parent>/.<clone>.worktrees/wf_<run>-<n>` on the branch `worktree-wf_<run>-<n>`, cut from
+   the session tree's HEAD (before kit #21 the harness made it at `<project>/.claude/worktrees/`
+   under `worktree.baseRef: "head"`, measured). The lane reports its start SHA, implements the brief, runs
    package-scoped gates there through `bk-gate`, and commits on that branch. It returns
    `{branch, start, sha, paths, gates:[{name, rc, line}], summary, handback?}`. The script
    drops a lane whose `start` is not `head` and reports it under `stalled`. A lane that hits
@@ -254,10 +257,10 @@ worktrees; one review when the lanes merge; no per-lane reviewer and no refuters
 2. **Integrate**, one agent, sonnet. Merges each lane branch into `branch` in unit order
    (the lane branches are visible from the session's tree — measured). A lane that conflicts
    is not resolved: it is left out and reported. It then removes the worktree and deletes the
-   branch of every merged lane; a changed worktree is never removed by the harness
-   (measured). Returns `{merged[], conflicted[], head, unclaimed[]}`; `unclaimed` is every
-   worktree under `.claude/worktrees/` that no returned lane names, which is what a lane that
-   died left behind.
+   branch of every merged lane; the harness keeps a hook-made worktree when its agent ends,
+   and before the hook it kept a changed one (measured). Returns `{merged[], conflicted[],
+   head, unclaimed[]}`; `unclaimed` is every worktree on a `worktree-wf_*` branch that no
+   returned lane names, wherever it is on disk, which is what a lane that died left behind.
 3. **Gate**, one agent, haiku. Runs `bk-gate run -- <gate>` on the merged tree and returns
    the verdict line verbatim with `rc`. The script decides green from `rc == 0`, never from
    the agent's reading.
@@ -281,7 +284,7 @@ hot path or the money path: the main loop reads those diffs itself before landin
   defaults to `make audit-ext`, stage 4's API rule becomes the `Ext` convention and the
   rebase landmines, and nothing is owed (`parity` and `read` are pb's).
 - **In place** (S1: `module` is the fork's and `fork` is unset or the project): stages 1 to 5
-  as in pb, the worktrees under the fork's own `.claude/worktrees/`. The lane gates are
+  as in pb, the worktrees beside the fork clone (`worktree-create`). The lane gates are
   the unit's exact packages, written out (`go build|vet|test -count=1 ./<pkg>`, then
   `make audit-ext`), never `./...`, `make test` or `make lint`: the tree is the production
   host's, and `guard-prod-run` refuses the whole-module forms. The run branch is squashed to
@@ -390,7 +393,8 @@ plan, §Phase 0 results) unless marked **docs**.
   `CLAUDE_PLUGIN_DATA`.
 - `agentType`, `model` and the agent's `skills:` preload are honoured inside a workflow.
 - `worktree.baseRef` decides where an isolated agent starts: `fresh` (the default) is
-  `origin/<default-branch>`, `head` is the session's HEAD.
+  `origin/<default-branch>`, `head` is the session's HEAD. Not with a WorktreeCreate hook,
+  which does the `git worktree add` itself (docs; the kit's branches from HEAD).
 - `force-for-plugin: true` applies the kit's output style, headless and interactive, over a
   user-level `outputStyle`.
 - Without `version` in `plugin.json`, the commit SHA is the version.

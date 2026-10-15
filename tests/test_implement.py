@@ -156,7 +156,7 @@ class Implement(unittest.TestCase):
         self.assertIn("unreviewed", dead["left"])
 
         orphan = {"merged": ["a", "b"], "conflicted": [], "head": "f" * 40,
-                  "unclaimed": [{"worktree": "/p/.claude/worktrees/wf_run-3", "branch": "worktree-wf_run-3"}]}
+                  "unclaimed": [{"worktree": "/.p.worktrees/wf_run-3", "branch": "worktree-wf_run-3"}]}
         ran = self.run_script(args(), answers(integrate=orphan))
         left = next(s for s in ran["result"]["stalled"] if s["reason"] == "worktrees no returned lane claims")
         self.assertEqual(left["left"][0]["branch"], "worktree-wf_run-3")
