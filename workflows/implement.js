@@ -27,27 +27,34 @@ export const meta = {
 //     branch: 'feat/x',              // the run branch, checked out in the session's tree
 //     head: '<sha>',                 // its commit: every lane starts here
 //     gate: 'make test-offline PKG=./internal/feeds/... ./internal/state/...',
-//     fork: '/abs/path/to/bsc-geth', // set when the units are FORK work: see below
+//     fork: '/abs/path/to/bsc-geth', // the fork checkout, when the units are fork work from pb
 //     tiers: { review: 'session' },  // per-stage model; nothing above opus by name
 //     project: '/abs/path/to/clone', // the session's project root, and
 //     module: 'example.com/bot',     // the module its go.mod names: see below
 //   }
 // The script cannot read the filesystem, so the caller says what the project is;
-// hooks/implement-args fills both from the disk when they are absent, and itself
-// denies the call in the fork, so this check is the second line. When `module` is github.com/ethereum/go-ethereum the session is rooted in the
-// bsc-geth fork itself, and a run is refused before any agent starts when `fork` is
-// unset or names `project` (compared as given, trailing slashes dropped, no symlink
-// resolution): in-place fork runs are not supported yet. Without `module` that check
-// is not made, and the run logs so.
-// The project's .claude/settings.json must set worktree.baseRef to "head": under the
-// default a lane starts at origin/<default-branch>, and the start check drops it.
+// hooks/implement-args fills `project` and `module` from the disk when they are absent.
+// Three modes follow from them:
 //
-// With `fork`, harness worktrees do not apply (they belong to the session's
-// repository): lanes run one at a time in the fork checkout, each committing on
-// `branch` there, which the caller cut from mrinal/dev and checked out. There is no
-// Integrate stage, the reviewer's API rule is the Ext convention, and the default
-// gate is `make audit-ext`. A change that spans the fork and the bot is two runs, the
-// fork's first.
+//   client     `module` is not github.com/ethereum/go-ethereum and `fork` is unset: the
+//              bot. Parallel worktree lanes, Integrate, pb's gates and owed rules.
+//   in place   `module` is github.com/ethereum/go-ethereum and `fork` is unset or names
+//              `project` (compared as given, trailing slashes dropped; the hook canonicalises
+//              a symlink): a session rooted in the bsc-geth fork. Parallel worktree lanes in
+//              the fork's own repository and Integrate as in the bot; fork-ext-convention on
+//              every lane; lane gates on the exact packages, never ./... (the tree is the production
+//              host's); the gate defaults to `make audit-ext`; the review rule is the Ext
+//              convention and the rebase landmines; nothing is owed.
+//   remote     `fork` names another tree: fork work from a pb session. Harness worktrees
+//              belong to the session's repository, so lanes run one at a time in the fork
+//              checkout, each committing on `branch` there, which the caller cut from
+//              mrinal/dev and checked out. No Integrate stage; the fork gate, skills and
+//              review rule as in place.
+//
+// Without `module`, in place is never chosen and the run logs so. The project's
+// .claude/settings.json must set worktree.baseRef to "head": under the default a lane
+// starts at origin/<default-branch>, and the start check drops it. A change that spans
+// the fork and the bot is two runs, the fork's first.
 //
 // Nothing is pushed and no PR is opened. `make replay-parity` is never run here:
 // `owed.parity` tells the caller to run it once.
@@ -152,14 +159,21 @@ const a = args || {}
 const units = Array.isArray(a.units) ? a.units : []
 const branch = a.branch ? String(a.branch) : ''
 const head = a.head ? String(a.head) : ''
-const fork = a.fork ? String(a.fork) : ''
+const forkGiven = a.fork ? String(a.fork) : ''
 const project = a.project ? String(a.project) : ''
 const projectModule = a.module ? String(a.module) : ''
-const gateCmd = a.gate ? String(a.gate) : fork ? 'make audit-ext' : ''
+const UPSTREAM = 'github.com/ethereum/go-ethereum'
+const bare = (p) => String(p).replace(/\/+$/, '')
+// The three modes of the header. `remote` is the fork checkout of a pb session, or ''.
+const inPlace = projectModule === UPSTREAM && (!forkGiven || (project && bare(forkGiven) === bare(project)))
+const remote = inPlace ? '' : forkGiven
+const forkWork = inPlace || Boolean(remote)
+const mode = inPlace ? 'fork in place' : remote ? 'fork checkout' : 'client'
+const gateCmd = a.gate ? String(a.gate) : forkWork ? 'make audit-ext' : ''
 const TIERS = Object.assign({ lane: 'opus', integrate: 'sonnet', gate: 'haiku', review: 'opus', fix: 'opus' }, a.tiers || {})
 
-const git = fork ? `git -C "${fork}"` : 'git'
-const tree = fork ? `the fork checkout ${fork}` : "the repository root (the session's tree, not a worktree)"
+const git = remote ? `git -C "${remote}"` : 'git'
+const tree = remote ? `the fork checkout ${remote}` : "the repository root (the session's tree, not a worktree)"
 const normPkg = (p) => String(p).replace(/^\.\//, '').replace(/\/\.\.\.$/, '').replace(/\/+$/, '')
 const pkgsOf = (unit) => (Array.isArray(unit.packages) ? unit.packages.map(normPkg).filter(Boolean) : [])
 // A lane reports a full SHA and the caller may pass a short one.
@@ -183,16 +197,7 @@ const refuse = (error, detail) => {
   return { error, ...(detail || {}) }
 }
 if (units.length === 0) return refuse('no units', { expected: '{units:[{id, brief, packages?, skills?}], branch, head, gate, fork?, tiers?, project?, module?}' })
-const bare = (p) => String(p).replace(/\/+$/, '')
-if (projectModule === 'github.com/ethereum/go-ethereum' && (!fork || (project && bare(fork) === bare(project)))) {
-  return refuse(
-    'This project is the bsc-geth fork; in-place fork runs are not supported yet (kit #16). Dispatch ' +
-      'blockchain-kit:golang-implementer by hand, package-scoped, or run implement from the prediction-bot clone ' +
-      'with `fork` set.',
-    { project, module: projectModule, fork },
-  )
-}
-if (!projectModule) log('no module given — whether this project is the bsc-geth fork is unchecked')
+if (!projectModule) log('no module given — whether this project is the bsc-geth fork is unchecked; the run is a client run')
 const bad = units.filter((u) => !u || !u.id || !u.brief)
 if (bad.length) return refuse('a unit lacks id or brief', { count: bad.length })
 const ids = units.map((u) => String(u.id))
@@ -207,16 +212,16 @@ if (shared.length) return refuse('units share a package', { shared })
 const blind = units.filter((u) => pkgsOf(u).length === 0).map((u) => String(u.id))
 if (blind.length) log(`no packages declared for ${blind.join(', ')} — their overlap with other units is unchecked`)
 if (!gateCmd) log('no gate bound — Gate and Re-gate are skipped, a coverage hole')
-log(`${units.length} unit(s) · tree=${fork || '(the project)'} · branch=${branch} @ ${head} · gate=${gateCmd || '(none)'}`)
+log(`${units.length} unit(s) · ${mode} · tree=${remote || project || '(the project)'} · branch=${branch} @ ${head} · gate=${gateCmd || '(none)'}`)
 
 // The skills a stage loads by name: a subagent gets none by description. `go`
 // always, the Ext convention for fork work, the hot-path skill when a unit's
 // packages reach the hot-path set, and whatever the unit names.
 const skillsOf = (unit) => {
-  const hot = !fork && pkgsOf(unit).some((p) => HOT_PATH.some((h) => p === `internal/${h}` || p.startsWith(`internal/${h}/`)))
+  const hot = !forkWork && pkgsOf(unit).some((p) => HOT_PATH.some((h) => p === `internal/${h}` || p.startsWith(`internal/${h}/`)))
   const named = [
     'go',
-    ...(fork ? ['fork-ext-convention'] : []),
+    ...(forkWork ? ['fork-ext-convention'] : []),
     ...(hot ? ['hot-path-determinism'] : []),
     ...(unit.skills || []).map((s) => String(s).replace(/^blockchain-kit:/, '')),
   ]
@@ -225,19 +230,29 @@ const skillsOf = (unit) => {
 const loadLine = (list) => `Before reading or editing Go, load with the Skill tool and follow: ${list.join(', ')}. `
 const allSkills = [...new Set(units.flatMap(skillsOf))]
 
-const laneGates = fork
-  ? `Every path in this brief is under ${fork}, and every command names that tree: go -C "${fork}" …, ${git} …, ` +
-    `bk-gate -C "${fork}" <name> -- <command>. Gates are package-scoped: go vet and go test -count=1 on the packages ` +
-    `you touched, then make audit-ext. Never build, vet or test the whole fork. `
-  : `Gates are package-scoped and run through bk-gate: bk-gate build -- go build ./..., bk-gate vet -- go vet ./..., ` +
-    `and bk-gate test -- go test -count=1 <the packages you touched>. `
+// The fork's tree is the production host's: a lane there never builds, vets or tests the
+// whole module (`./...`); the kit's guard-prod-run hook refuses it, and this text is why.
+// Exact packages, not `./<pkg>/...`: a fork package's subtree (eth/) is most of the module.
+const pkgGlobs = (unit) => (pkgsOf(unit).length ? pkgsOf(unit).map((p) => `./${p}`).join(' ') : './<pkg>')
+const laneGates = (unit) =>
+  remote
+    ? `Every path in this brief is under ${remote}, and every command names that tree: go -C "${remote}" …, ${git} …, ` +
+      `bk-gate -C "${remote}" <name> -- <command>. Gates are package-scoped: go vet and go test -count=1 on the packages ` +
+      `you touched, then make audit-ext. Never build, vet or test the whole fork. `
+    : inPlace
+      ? `This tree is the bsc-geth fork on its production host. Gates are package-scoped and run through bk-gate, ` +
+        `one at a time: bk-gate build -- go build ${pkgGlobs(unit)}, bk-gate vet -- go vet ${pkgGlobs(unit)}, ` +
+        `bk-gate test -- go test -count=1 ${pkgGlobs(unit)}, then bk-gate audit -- make audit-ext. Never ` +
+        `build, vet or test the whole fork: no ./..., no make test, no make lint. `
+      : `Gates are package-scoped and run through bk-gate: bk-gate build -- go build ./..., bk-gate vet -- go vet ./..., ` +
+        `and bk-gate test -- go test -count=1 <the packages you touched>. `
 
 const lanePrompt = (unit, startAt) =>
   `You are a lane of the blockchain-kit:implement workflow, unit "${unit.id}". The section "As a lane of the ` +
   `implement workflow" in your instructions governs: report your start, run gates through bk-gate, commit on your ` +
   `branch, hand back rather than guess.\n\n` +
-  (fork
-    ? `This is a serial fork run. Work in ${fork} on branch ${branch}, which is checked out there. ` +
+  (remote
+    ? `This is a serial fork run. Work in ${remote} on branch ${branch}, which is checked out there. ` +
       `\`${git} rev-parse HEAD\` must print ${startAt} before your first edit. Commit on that branch with ${git}. ` +
       `A hand-back commits nothing and leaves the tree as you found it.\n\n`
     : `You are in your own git worktree on a branch the harness named. \`git rev-parse HEAD\` must print ${startAt} ` +
@@ -245,7 +260,7 @@ const lanePrompt = (unit, startAt) =>
       (pkgsOf(unit).length ? `your packages are ${pkgsOf(unit).join(', ')} and nothing outside them is yours. ` : `touch only what the brief names. `) +
       `Never touch go.mod or go.sum.\n\n`) +
   loadLine(skillsOf(unit)) +
-  laneGates +
+  laneGates(unit) +
   `\n\nThe brief:\n${unit.brief}`
 
 const laneOpts = (unit) => ({
@@ -255,14 +270,14 @@ const laneOpts = (unit) => ({
   ...modelOf('lane'),
   effort: 'medium',
   schema: LANE,
-  ...(fork ? {} : { isolation: 'worktree' }),
+  ...(remote ? {} : { isolation: 'worktree' }),
 })
 
-// Lane. Concurrent in worktrees; in a fork run serial, each lane starting where the
-// last one ended, and the run stops at the first lane that dies or hands back: the
+// Lane. Concurrent in worktrees; in a remote fork run serial, each lane starting where
+// the last one ended, and the run stops at the first lane that dies or hands back: the
 // checkout is shared, so what that lane left is the next lane's tree.
 const lanes = []
-if (fork) {
+if (remote) {
   let at = head
   let stopped = ''
   for (const unit of units) {
@@ -299,7 +314,7 @@ for (const { unit, out, startAt, notStarted } of lanes) {
       stage: 'Lane',
       reason: 'the lane died',
       branch: null,
-      left: fork ? `possibly uncommitted edits in ${fork} on ${branch}` : 'possibly a worktree and a worktree-wf_* branch: see `unclaimed`',
+      left: remote ? `possibly uncommitted edits in ${remote} on ${branch}` : 'possibly a worktree and a worktree-wf_* branch: see `unclaimed`',
     })
   } else if (!sameSha(out.start, startAt)) {
     stalled.push({ unit: id, stage: 'Lane', reason: `started at ${out.start}, not ${startAt} — dropped (worktree.baseRef must be "head")`, branch: out.branch, sha: out.sha })
@@ -327,7 +342,7 @@ if (mergeable.length === 0) {
 let merged = mergeable
 let conflicted = []
 let tip = mergeable[mergeable.length - 1].sha
-if (!fork) {
+if (!remote) {
   const known = lanes.filter((l) => l.out && l.out.branch).map((l) => l.out.branch)
   let integrated = null
   try {
@@ -376,7 +391,7 @@ if (!fork) {
 
 const owed = () => {
   const touched = (re) => merged.filter((m) => m.paths.some((p) => re.test(String(p)))).map((m) => m.unit)
-  const o = { parity: fork ? [] : touched(PARITY), read: fork ? [] : touched(GUARDED) }
+  const o = { parity: forkWork ? [] : touched(PARITY), read: forkWork ? [] : touched(GUARDED) }
   if (o.parity.length) log(`replay-parity is owed by the caller, once: ${o.parity.join(', ')}`)
   if (o.read.length) log(`the caller reads these diffs before landing: ${o.read.join(', ')}`)
   return o
@@ -388,7 +403,7 @@ const runGate = async (phase) => {
   try {
     g = await agent(
       `Run exactly this one command from ${tree}, and nothing else:\n\n` +
-        `  bk-gate ${fork ? `-C "${fork}" ` : ''}run -- ${gateCmd}\n\n` +
+        `  bk-gate ${remote ? `-C "${remote}" ` : ''}run -- ${gateCmd}\n\n` +
         `Return its first output line verbatim as line, the rc number in that line as rc, and the lines after ` +
         `it as tail. Do not fix anything, do not run it twice, do not read the out file. If bk-gate is not ` +
         `found, return line "bk-gate: not found" and rc 127.`,
@@ -414,8 +429,9 @@ if (gateCmd) {
 }
 
 // Review. One seat over the whole merged range.
-const apiRule = fork
-  ? `This is the bsc-geth fork: the four prediction-bot angles do not apply and the Ext convention does. `
+const apiRule = forkWork
+  ? `This is the bsc-geth fork: the four prediction-bot angles do not apply; the Ext convention and the rebase ` +
+    `landmines (the fork's docs/upstream-rebase-landmines.md) do. `
   : `A go-ethereum API in the diff resolves to the pinned fork: check it with \`bsc-fork show <Symbol>\`. `
 let review = null
 try {
@@ -456,8 +472,8 @@ try {
       toFix.map((f, i) => `${i + 1}. [${f.severity}] ${f.file}${f.line ? ':' + f.line : ''} — ${f.title}: ${f.why}`).join('\n') +
       `\n\n` +
       loadLine(allSkills) +
-      laneGates +
-      `Then make one commit on ${branch}${fork ? ` with ${git}` : ''}, as the section "As a lane of the implement ` +
+      laneGates({ packages: [...new Set(merged.flatMap((m) => pkgsOf(units.find((u) => String(u.id) === m.unit) || {})))] }) +
+      `Then make one commit on ${branch}${remote ? ` with ${git}` : ''}, as the section "As a lane of the implement ` +
       `workflow" in your instructions describes. Never touch go.mod or go.sum. Return the numbers of the ` +
       `findings you fixed; a finding you could not fix without leaving its file's contract stays unfixed and ` +
       `you say why in summary.`,

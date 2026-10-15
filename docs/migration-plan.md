@@ -269,7 +269,7 @@ Follow-ups, not in this phase:
   holds without the kit's hook.
 - The `dev.slice` comment, at the next host install.
 - `docs/superpowers/plans/` in bsc-geth consolidated into issues.
-- Kit PR B: the `implement` workflow's in-place fork mode (D§7).
+- Kit PR B: the `implement` workflow's in-place fork mode (D§7): landed as kit #16's fix.
 
 ## Phase 6 — issues
 

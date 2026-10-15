@@ -57,9 +57,11 @@ The brief says when you are a lane or the fix stage of `blockchain-kit:implement
 section governs, and it is the one case in which you commit.
 
 - **Start.** Before any edit, run `git rev-parse HEAD` and `git branch --show-current` and keep
-  both for the return. A lane is in its own worktree on a branch the harness named: you do not
-  choose, rename or leave that branch. The brief names the commit you start from. If `HEAD` is
-  another commit, edit nothing and return a `handback` that says so.
+  both for the return. A lane is in its own worktree on a branch the harness named (in the bot,
+  or in the fork's own clone): you do not choose, rename or leave that branch. In a serial fork
+  run from the bot the lane works in the fork checkout on the branch the brief names. The brief
+  names the commit you start from. If `HEAD` is another commit, edit nothing and return a
+  `handback` that says so.
 - **Gates through `bk-gate`.** Each package-scoped gate runs as `bk-gate <name> -- <command>`
   (`bk-gate -C <checkout> …` for the fork). It prints one verdict line, `gate: <name> rc=<n>
   t=<s>s out=<path>`, and on red at most ten failing lines. Return each gate as
@@ -71,7 +73,7 @@ section governs, and it is the one case in which you commit.
   that is not yours, create or switch a branch, or discard tree state.
 - **Hand back rather than guess.** A question the brief does not answer: finish what does not
   depend on it, commit only what is complete and green, and return `handback` with the question
-  and the options you see. In a fork run, a hand-back commits nothing.
+  and the options you see. In a serial fork run, a hand-back commits nothing.
 - **Return** `{branch, start, sha, paths, gates, summary, handback?}`: the branch name, the
   commit you started from, the commit you ended on (equal to `start` when you committed
   nothing), every path you changed, the gates, and one line per path.

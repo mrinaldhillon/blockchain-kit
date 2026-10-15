@@ -69,6 +69,12 @@ class Implement(unittest.TestCase):
     def labels(self, ran: dict) -> list[str]:
         return [c["label"] for c in ran["calls"]]
 
+    def assertNoWholeModule(self, prompt: str) -> None:
+        """No gate in `prompt` covers the whole module: the fork's tree is the production host's."""
+        for whole in ("go build ./...", "go vet ./...", "go test -count=1 <", "go test ./...", "make test", "make lint"):
+            self.assertNotIn(f"-- {whole}", prompt, whole)
+        self.assertIn("Never build, vet or test the whole fork", prompt)
+
     def test_a_clean_run_merges_gates_and_reviews(self):
         ran = self.run_script(args(), answers())
         out = ran["result"]
@@ -171,25 +177,70 @@ class Implement(unittest.TestCase):
         self.assertIsNone(fixer["isolation"])  # the fix is on the run branch, in the session's tree
         self.assertNotIn("stutter", fixer["prompt"])
 
-    def test_a_session_rooted_in_the_fork_is_refused_before_any_agent(self):
+    def test_a_run_rooted_in_the_fork_runs_in_place(self):
         root = "/src/bsc-geth"
         node = "github.com/ethereum/go-ethereum"
+        units = [unit("a", "eth"), unit("b", "./p2p/...")]
+        given = answers(**{"lane:a": lane(1, "eth"), "lane:b": lane(2, "p2p")})
         for over in ({}, {"fork": root}, {"fork": root + "/"}):
-            ran = self.run_script(args(project=root, module=node, **over), answers())
-            self.assertEqual(ran["calls"], [], over)
-            error = ran["result"]["error"]
-            self.assertTrue(error.startswith("This project is the bsc-geth fork; in-place fork runs are not supported "
-                                             "yet (kit #16)."), error)
-            self.assertIn("blockchain-kit:golang-implementer by hand, package-scoped", error)
-            self.assertIn("from the prediction-bot clone with `fork` set", error)
-        # the client, naming a fork checkout elsewhere, runs; so does a run that does not say
-        ran = self.run_script(args(project="/src/prediction-bot", module="example.com/bot", fork=root, gate="x"),
-                              answers(**{"lane:a": lane(1, "internal/feeds", branch="run"),
-                                         "lane:b": lane(2, "internal/state", branch="run", start="1" * 40)}))
-        self.assertEqual(self.labels(ran)[:2], ["lane:a", "lane:b"])
+            ran = self.run_script(args(units=units, project=root, module=node, gate=None, **over), given)
+            out = ran["result"]
+            # parallel worktree lanes and Integrate, as in the client
+            self.assertEqual(self.labels(ran), ["lane:a", "lane:b", "integrate", "gate", "review"], over)
+            by = {c["label"]: c for c in ran["calls"]}
+            self.assertEqual((by["lane:a"]["isolation"], by["lane:a"]["agentType"]), ("worktree", "blockchain-kit:golang-implementer"))
+            self.assertIn("You are in your own git worktree", by["lane:a"]["prompt"])
+            self.assertEqual((out["merged"], out["owed"]), (["a", "b"], {"parity": [], "read": []}))
+            # the fork's skills and gates: package-scoped, never the whole module
+            for name in ("lane:a", "lane:b"):
+                self.assertIn("blockchain-kit:fork-ext-convention", by[name]["prompt"])
+                self.assertNotIn("hot-path-determinism", by[name]["prompt"])
+                self.assertNoWholeModule(by[name]["prompt"])
+                self.assertNotIn("-C ", by[name]["prompt"])
+            self.assertIn("bk-gate test -- go test -count=1 ./eth,", by["lane:a"]["prompt"])
+            self.assertIn("bk-gate build -- go build ./p2p,", by["lane:b"]["prompt"])  # exact, not ./p2p/...
+            self.assertIn("then bk-gate audit -- make audit-ext", by["lane:b"]["prompt"])
+            self.assertIn("no make test, no make lint", by["lane:b"]["prompt"])
+            # the gate defaults to make audit-ext, run in the project's tree; the review rule is the Ext convention
+            self.assertIn("  bk-gate run -- make audit-ext\n", by["gate"]["prompt"])
+            self.assertIn("the Ext convention and the rebase landmines", by["review"]["prompt"])
+            self.assertNotIn("bsc-fork show", by["review"]["prompt"])
+            self.assertIn("git merge --no-edit", by["integrate"]["prompt"])
+        self.assertIn("2 unit(s) · fork in place · tree=/src/bsc-geth", "\n".join(ran["logs"]))
+        # the fix stage in place: the fork's gates over the merged units' packages, never ./...
+        found = [{"title": "x", "file": "eth/a.go", "severity": "blocker", "why": "y"}]
+        fix = {"sha": "e" * 40, "paths": ["eth/a.go"], "fixed": [1]}
+        ran = self.run_script(args(units=units, project=root, module=node),
+                              answers(**{"lane:a": lane(1, "eth"), "lane:b": lane(2, "p2p"),
+                                         "review": {"findings": found, "enumerated": "all"}, "fix": fix,
+                                         "re-gate": {"line": GREEN, "rc": 0}}))
+        fixer = next(c for c in ran["calls"] if c["label"] == "fix")
+        self.assertIn("bk-gate test -- go test -count=1 ./eth ./p2p,", fixer["prompt"])
+        self.assertNoWholeModule(fixer["prompt"])
+        self.assertIn("blockchain-kit:fork-ext-convention", fixer["prompt"])
+        self.assertNotIn("git -C", fixer["prompt"])
+        self.assertEqual(ran["result"]["head"], "e" * 40)
+        # a caller's gate wins over the default
+        ran = self.run_script(args(units=units, project=root, module=node, gate="go test -count=1 ./eth/..."), given)
+        self.assertIn("bk-gate run -- go test -count=1 ./eth/...", next(c for c in ran["calls"] if c["label"] == "gate")["prompt"])
+
+    def test_a_fork_root_naming_another_checkout_is_a_remote_run(self):
+        # the client, naming a fork checkout elsewhere, runs serially there; so does a fork root naming another tree
+        root = "/src/bsc-geth"
+        for project, module in (("/src/prediction-bot", "example.com/bot"), ("/src/bsc-other", "github.com/ethereum/go-ethereum")):
+            ran = self.run_script(args(project=project, module=module, fork=root, gate="x"),
+                                  answers(**{"lane:a": lane(1, "internal/feeds", branch="run"),
+                                             "lane:b": lane(2, "internal/state", branch="run", start="1" * 40)}))
+            self.assertEqual(self.labels(ran)[:2], ["lane:a", "lane:b"], project)
+            by = {c["label"]: c for c in ran["calls"]}
+            self.assertIsNone(by["lane:a"]["isolation"])
+            self.assertIn(f'go -C "{root}"', by["lane:a"]["prompt"])
+            self.assertNotIn("integrate", self.labels(ran))
+        # a run that does not say its module is a client run, and logs so
         ran = self.run_script(args(), answers())
         self.assertIn("lane:a", self.labels(ran))
-        self.assertIn("no module given — whether this project is the bsc-geth fork is unchecked", ran["logs"])
+        self.assertIn("no module given — whether this project is the bsc-geth fork is unchecked; the run is a client run", ran["logs"])
+        self.assertIn("2 unit(s) · client ·", "\n".join(ran["logs"]))
 
     def test_a_fork_run_is_serial_and_stops_at_a_hand_back(self):
         fork = "/src/bsc-geth"

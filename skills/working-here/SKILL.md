@@ -45,8 +45,10 @@ anything here.
      and leaves a clean `main` at the merge; the kit's `land-shape` hook holds the call to that
      shape. Exit 0 merged, 1 red, 3 merged with a cleanup left, 4 refused, each said in its
      last lines. A red is fixed, committed and sent through the same call.
-   - bsc-geth: no CI and no `land`. With the class's gate green, `git push origin mrinal/dev`,
-     behind `.githooks/pre-push`. `mrinal/master` is not touched (operator, 2026-10-14):
+   - bsc-geth: no CI and no `land`. With the class's gate green, squash the branch to its
+     feature commits (an `implement` run leaves lane and merge commits; every commit on the
+     stack is upstream-rebase cost), then `git push origin mrinal/dev`, behind
+     `.githooks/pre-push`. `mrinal/master` is not touched (operator, 2026-10-14):
      `.githooks/reference-transaction` holds it.
 
 One unit, or a change too small to brief, skips steps 3 to 5: dispatch
@@ -106,8 +108,9 @@ The class is read off the diff and decides the ceremony. The last two rows are b
 
 bsc-geth is developed three ways (operator, 2026-10-14; `blockchain-kit:fork-development`):
 
-- **In its own clone**, a session rooted in bsc-geth: node work, landed by step 6's push;
-  `implement` refuses a fork root for now, so dispatch the implementer per unit.
+- **In its own clone**, a session rooted in bsc-geth: node work, landed by step 6's push.
+  `implement` runs in place: worktree lanes in the clone, package-scoped gates, `make
+  audit-ext`; the whole-module gates stay out of a lane (the tree is the production host's).
 - **From prediction-bot**, in the clone `BSC_FORK_PATH` names: the workflow with `fork` set,
   serial, on a branch cut from `mrinal/dev`, gated by `make audit-ext`.
 - **A bot change that needs a fork change** is the second way twice in one pb session: the

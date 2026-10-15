@@ -17,25 +17,31 @@ is the header of `workflows/implement.js`; the process around it is `blockchain-
    and show them before launching. Two units never share a package: split differently, or run
    them as two runs.
 2. **Preconditions**, one Bash call each; stop and say which failed:
-   - `git branch --show-current` is the run branch, and it is not `main`.
+   - `git branch --show-current` is the run branch: in prediction-bot not `main`; in bsc-geth
+     `mrinal/dev` or a branch cut from it, never `master` or `mrinal/master`.
    - `git status --porcelain --untracked-files=no` prints nothing.
    - `.claude/settings.json` sets `worktree.baseRef` to `"head"` (Read it). Without it a lane
      starts at `origin/main` and the workflow drops it.
    - `git rev-parse HEAD` is the `head` you pass.
 3. **The gate** is the offline check scoped to the units' packages, for example
    `make test-offline PKG='./internal/feeds/... ./internal/state/...'`. Never
-   `make replay-parity`: the run reports when it is owed.
+   `make replay-parity`: the run reports when it is owed. In bsc-geth it defaults to
+   `make audit-ext`, the lanes having gated their own packages; a package-scoped `go test`
+   may replace it, never `./...`, `make test` or `make lint` (the tree is the production
+   host's).
 4. **Launch** the Workflow tool with `name: "blockchain-kit:implement"` and `args` as a JSON
    object `{units, branch, head, gate, project, module}` — plus `fork: "<absolute checkout
    path>"` when the units are fork work from prediction-bot, where `branch` is the branch
    checked out in the fork checkout, cut from `mrinal/dev`. `project` and `module` go on every
    run: `project` is the absolute project root (`git rev-parse --show-toplevel`), `module` the
    `module` line of the project's `go.mod` (Read it). The script cannot read the filesystem;
-   from these it refuses a run rooted in the fork itself (`module` is
-   `github.com/ethereum/go-ethereum` and `fork` is unset or equals `project`) until the kit's
-   in-place fork mode lands. In a bsc-geth session, dispatch `blockchain-kit:golang-implementer`
-   per unit instead. The run is in the background: do not poll it.
-5. **When it returns**, adjudicate; nothing is pushed and no PR exists yet.
+   from these it picks its mode: the bot; the fork in place (`module` is
+   `github.com/ethereum/go-ethereum` and `fork` is unset or equals `project`: worktree lanes in
+   this clone, package-scoped gates); or a fork checkout from the bot (`fork` names another
+   tree: serial). The kit's `implement-args` hook fills `project` and `module` from the tree
+   when they are left out. The run is in the background: do not poll it.
+5. **When it returns**, adjudicate; nothing is pushed and no PR exists yet. In bsc-geth the
+   landing squashes the run branch to its feature commits before the push (`working-here`).
    - `handbacks`: answer the question, then re-run that unit alone.
    - `conflicted` and `stalled`: each names the branch or worktree it left. Decide whether to
      re-run the unit on the new head or drop it; remove what is abandoned
