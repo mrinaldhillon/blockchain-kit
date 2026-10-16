@@ -56,6 +56,7 @@ read by the main loop and `make replay-parity` when owed.
 | `hooks/gofmt-on-edit` | formats a Go file Claude writes, in the project, a worktree of it, or the fork checkout |
 | `lib/` | `forkpin.py` (the pin, the module cache, the checkout, `go.work`, the index), `bkhost.py` (the production-host test), `blockchain-kit-homes.sh` (the config home) |
 | `share/mcp-gopls.json` | the `gopls` entry for a repo's `.mcp.json` |
+| `share/cloud-setup-bsc-geth.sh` | the setup script of the `bsc-geth` cloud environment at claude.ai/code, versioned; §Cloud sessions |
 | `tests/run` | the hermetic suite: `bin/`, `lib/`, the hooks, and the workflow script against scripted agents |
 | `.claude-plugin/` | plugin and single-plugin marketplace manifests. No `version`: the commit SHA is the version |
 
@@ -191,6 +192,73 @@ bsc-fork path --checkout eth/handler.go   # in the checkout: the file to edit
 `-C DIR` works from another directory; `--json` for a script. Exit codes: 0 answered, 1 nothing
 matched or stale or absent, 2 usage, no fork pin, or no index. It reads; it never generates
 and never moves the pin. The index is the repo's (`make fork-index`, the `fork-indexer` agent).
+
+## Cloud sessions
+
+A session of Claude Code on the web (claude.ai/code, the Desktop app's Cloud mode, `claude
+--cloud`) runs on a fresh Anthropic-hosted VM, Ubuntu 24.04 on x86_64, documented at 4 vCPUs
+and 16 GB, with a fresh clone of one repository. For bsc-geth that session is set up in two
+places, and the kit is in neither of them.
+
+**The environment, at claude.ai/code.** Environments are created and edited only in the
+environment selector on the new-session screen (the first control under the message box →
+**New environment**); the CLI cannot create one. `/web-setup` sends the local `gh` token to
+the claude.ai account, which is what lets a cloud session clone the private fork, and makes a
+bare **Default** environment when none exists; `/remote-env` picks, among the existing ones,
+the default for `claude --cloud` and writes `remote.defaultEnvironmentId` to the user
+settings. The bsc-geth environment is:
+
+| Field | Value |
+|---|---|
+| Name | `bsc-geth` |
+| Network access | **Trusted**: the default allowlist carries `proxy.golang.org`, `sum.golang.org`, `github.com` and the release hosts `objects.githubusercontent.com`, `release-assets.githubusercontent.com` |
+| Environment variables | none |
+| Setup script | `share/cloud-setup-bsc-geth.sh`, pasted whole |
+
+The script runs as root before Claude Code launches, once per environment cache (about
+seven days, or until the script or the allowed hosts change), and must exit 0 inside about
+five minutes or nothing is cached. It warms Go 1.27.1 through `proxy.golang.org`, builds
+gopls into `/usr/local/bin` (bsc-geth's `.mcp.json` names a bare `gopls`), fetches the
+golangci-lint archive `build/ci.go` would download into `/root/.cache/bsc-geth` (a `go
+install` of the same version when the release host is refused), and downloads the modules
+when it finds the clone. Every step is `|| true`. A change to it is a kit commit, then a
+paste into the dialog: nothing propagates on its own.
+
+**The clone, in bsc-geth.** `.claude/settings.json` runs `build/cloud-session-start.sh` as a
+SessionStart hook (`startup|resume`). Outside a cloud session it exits at once. In one,
+each start: `make dev-setup`, so the reference-transaction guard holds `master` and
+`mrinal/master` there as on a dev box and the pre-push ratchet is live; the fetched linter
+archive verified against `build/checksums.txt` and unpacked into `build/cache/`, where the
+ratchet and `make lint` look; then one `Cloud session:` line with what it measured: Go,
+CPUs, memory, whether a systemd user manager answers, the guard and the linter. CLAUDE.md
+§Commands carries the clause the line points at: no systemd user manager, so
+`build/unit_run.py` cannot run and heavy work goes in the foreground.
+
+**What a cloud session does not have is the kit.** A cloud session installs no plugin from a
+repository's `enabledPlugins` or `extraKnownMarketplaces` (Claude Code docs, Cloud
+environments, "What carries over"), and the setup script cannot fetch this private
+repository either: it runs before the session's GitHub proxy is attached, and that proxy
+serves only the repositories attached to the session (a 403 for any other, archives
+included). So no routing table, no `guard-secrets`, no `gofmt-on-edit`, no worktree hooks,
+no `/blockchain-kit:implement`, no status line. What it has: bsc-geth's `CLAUDE.md`,
+`.mcp.json` (gopls) and the git guards. A cloud session is for bounded work the project facts
+suffice for, and the result is read by a local session with the kit; the working model stays
+local. Making the kit public would open the door, and is the operator's call.
+
+**Starting one.** From claude.ai/code, pick the repository, the branch (`mrinal/dev`) and the
+`bsc-geth` environment. From a terminal, `claude --cloud "<task>"` in a bsc-geth clone uses
+the `/remote-env` pick, but it clones from GitHub only when the Claude GitHub App is
+installed on the repository; without it, `/web-setup` connection or not, it uploads a bundle
+of the local clone, and bsc-geth is well past the 100 MB bundle limit (Claude Code docs,
+Cloud sessions, "Send local repositories without GitHub"). `gh pr` and `gh issue` fail in a
+cloud session (GraphQL is refused); `gh api repos/...` works.
+
+**The first session is the measurement.** Ask it to run `check-tools`, `go version`, `make
+geth`, `make lint`, `git config --get core.hooksPath`, `ls build/cache`, and to show its
+`Cloud session:` line. That settles what the docs leave open: the base image's Go, whether
+the toolchain download, the gopls build and the linter archive got through the proxies
+inside the five-minute cache window, and whether `make lint` has its binary. Until then,
+every claim in this section about what works in the VM is read from the docs, not measured.
 
 ## Checks
 
