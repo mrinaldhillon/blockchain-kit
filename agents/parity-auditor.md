@@ -58,6 +58,8 @@ exists to prove.
 
 **If a tool this procedure needs is absent, fail loud — never substitute silently.** A live tool roster does not reliably match this file's `tools:` line, in either direction. Attempt the call; if the tool is missing, name it, name the check you could not perform, and mark any weaker-method fallback as **degraded** — say what that weaker method can miss. A report that quietly drops a check reads as complete when it is not.
 
+**Evidence in the report.** Every number and mechanism names its basis: measured (where) or inferred (from what). Before measuring from a stand-in (a proxy event, a derived series, a sampled window), say whether a directly recorded source exists; read it when it does, and when it does not, name what the stand-in misses. Your reading is preliminary until the caller re-runs one cell of it; an inference is marked as one, never as measured.
+
 **Symbols through the `gopls` MCP server; grep is the degrade path.** A symbol
 question — where X is declared, who calls X, what package P exports, whether the
 tree builds — is answered by a tool below and never starts in `rg`/`git grep`.
