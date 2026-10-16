@@ -198,7 +198,7 @@ and never moves the pin. The index is the repo's (`make fork-index`, the `fork-i
 A session of Claude Code on the web (claude.ai/code, the Desktop app's Cloud mode, `claude
 --cloud`) runs on a fresh Anthropic-hosted VM, Ubuntu 24.04 on x86_64, documented at 4 vCPUs
 and 16 GB, with a fresh clone of one repository. For bsc-geth that session is set up in two
-places, and the kit is in neither of them.
+places, and the kit reaches it through the first.
 
 **The environment, at claude.ai/code.** Environments are created and edited only in the
 environment selector on the new-session screen (the first control under the message box →
@@ -234,16 +234,30 @@ CPUs, memory, whether a systemd user manager answers, the guard and the linter. 
 §Commands carries the clause the line points at: no systemd user manager, so
 `build/unit_run.py` cannot run and heavy work goes in the foreground.
 
-**What a cloud session does not have is the kit.** A cloud session installs no plugin from a
-repository's `enabledPlugins` or `extraKnownMarketplaces` (Claude Code docs, Cloud
-environments, "What carries over"), and the setup script cannot fetch this private
-repository either: it runs before the session's GitHub proxy is attached, and that proxy
-serves only the repositories attached to the session (a 403 for any other, archives
-included). So no routing table, no `guard-secrets`, no `gofmt-on-edit`, no worktree hooks,
-no `/blockchain-kit:implement`, no status line. What it has: bsc-geth's `CLAUDE.md`,
-`.mcp.json` (gopls) and the git guards. A cloud session is for bounded work the project facts
-suffice for, and the result is read by a local session with the kit; the working model stays
-local. Making the kit public would open the door, and is the operator's call.
+**The kit reaches the VM through the setup script, and only that way.** A cloud session
+installs no plugin from a repository's `enabledPlugins` or `extraKnownMarketplaces` (Claude
+Code docs, Cloud environments, "What carries over"), and a private repository is out of a
+VM's reach: the setup script runs before the session's GitHub proxy attaches, and that proxy
+serves only the repositories attached to the session. So this repository is public
+(operator, 2026-10-16), and the setup script clones it to `/opt/blockchain-kit` and installs
+the plugin at user scope on the VM by both routes it has: `claude plugin marketplace add` and
+`claude plugin install --scope user` when the `claude` CLI is on the setup script's PATH, and,
+always, a `directory` marketplace entry plus `enabledPlugins` merged into
+`/root/.claude/settings.json`. Whether either loads is not documented, and three things could
+stop it: the GitHub proxy may refuse a clone of a repository not attached to the session,
+public or not (the docs say so for archives; the setup script may run before that proxy
+applies); bsc-geth's own `.claude/settings.json` names the same marketplace from a `github`
+source, and two layers naming one marketplace from two sources is undocumented; and a
+plugin with a `bin/` directory is one claude.ai and Cowork do not install (Claude Code docs,
+Plugins reference), which may or may not reach the cloud CLI. The measurement is the
+session-start context: a `blockchain-kit: running from the checkout /opt/blockchain-kit at
+<sha>` line means the kit loaded; without it the session has bsc-geth's `CLAUDE.md`,
+`.mcp.json` (gopls) and the git guards, nothing of the kit, and its result is read by a local
+session with the kit. Public means public: the code, the issues (#7 holds the Claude-issue
+triage), the pull requests and this README are readable by anyone. Nothing in them is a
+credential or an address: the tree, the history, the issues, the PR bodies and the comments
+were scanned on 2026-10-16 before the change, and a kit change is reviewed as public text
+from now on.
 
 **Starting one.** From claude.ai/code, pick the repository, the branch (`mrinal/dev`) and the
 `bsc-geth` environment. From a terminal, `claude --cloud "<task>"` in a bsc-geth clone uses
@@ -253,12 +267,18 @@ of the local clone, and bsc-geth is well past the 100 MB bundle limit (Claude Co
 Cloud sessions, "Send local repositories without GitHub"). `gh pr` and `gh issue` fail in a
 cloud session (GraphQL is refused); `gh api repos/...` works.
 
-**The first session is the measurement.** Ask it to run `check-tools`, `go version`, `make
-geth`, `make lint`, `git config --get core.hooksPath`, `ls build/cache`, and to show its
-`Cloud session:` line. That settles what the docs leave open: the base image's Go, whether
-the toolchain download, the gopls build and the linter archive got through the proxies
-inside the five-minute cache window, and whether `make lint` has its binary. Until then,
-every claim in this section about what works in the VM is read from the docs, not measured.
+**The first session is the measurement.** Ask it to show its session-start context (the
+`Cloud session:` line and whether a `blockchain-kit:` line is there), then to run
+`check-tools`, `go version`, `make geth`, `make lint`, `git config --get core.hooksPath`,
+`ls build/cache`, `ls /opt/blockchain-kit`, `cat /root/.claude/settings.json` and `git
+ls-remote https://github.com/mrinaldhillon/blockchain-kit`. That settles what the docs leave
+open: the base image's Go, whether the toolchain download, the gopls build and the linter
+archive got through the proxies inside the five-minute cache window, whether `make lint` has
+its binary, and, for the kit, which of three cases holds: the clone failed during setup
+(`/opt/blockchain-kit` absent), the clone fails in-session too (`ls-remote` refused), or the
+clone worked and the plugin did not load (the directory there, no `blockchain-kit:` line).
+Until then, every claim in this section about what works in the VM is read from the docs,
+not measured.
 
 ## Checks
 
