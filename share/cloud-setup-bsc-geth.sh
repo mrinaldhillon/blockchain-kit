@@ -24,6 +24,9 @@
 #            and unpack into build/cache/ at each session start; `go install` of the same
 #            version is the fallback when the GitHub release host is refused
 #   modules  `go mod download` when the clone is at hand, time-capped
+#   tools    shellcheck (apt; deploy/production/host/tests/run.sh runs its shellcheck suite
+#            when it is on PATH, else SKIPs) and benchstat (the perf gate of the fork's
+#            hygiene refactor compares Benchmark*Ext before/after); each tolerated absent
 #
 # Every step is `|| true`: a miss costs the session a download, never its start. The
 # versions are bsc-geth's: go.mod `go` and build/checksums.txt `# version:golangci`; the
@@ -103,6 +106,22 @@ timeout 120 go version || true
 	else
 		step "no bsc-geth clone in reach; modules download in the session"
 	fi
+) &
+(
+	# The host bundle's offline gate lints its scripts when the binary is on PATH.
+	step "shellcheck (apt)"
+	if command -v apt-get >/dev/null 2>&1; then
+		(DEBIAN_FRONTEND=noninteractive timeout 180 apt-get install -y -q shellcheck >/dev/null 2>&1 ||
+			(timeout 120 apt-get update -q >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive timeout 180 apt-get install -y -q shellcheck >/dev/null 2>&1)) ||
+			step "shellcheck refused; run.sh will SKIP its shellcheck suite"
+	else
+		step "no apt-get; shellcheck not placed"
+	fi
+) &
+(
+	# Before/after comparison of the fork's Benchmark*Ext runs (perf gate).
+	step "benchstat -> /usr/local/bin"
+	GOBIN=/usr/local/bin timeout 240 go install golang.org/x/perf/cmd/benchstat@latest || step "benchstat refused; the perf gate compares by hand"
 ) &
 wait
 
