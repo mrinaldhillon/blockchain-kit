@@ -36,6 +36,7 @@ set -u
 GO_VERSION=1.27.1
 GOLANGCI=2.13.2
 GOPLS=v0.23.0
+BENCHSTAT=v0.0.0-20261009192801-be2c69fb417e  # golang.org/x/perf; the perf gate parses its table, so pinned
 CACHE=/root/.cache/bsc-geth
 mkdir -p "$CACHE" /usr/local/bin
 export GOTOOLCHAIN="go$GO_VERSION"
@@ -108,11 +109,14 @@ timeout 120 go version || true
 	fi
 ) &
 (
-	# The host bundle's offline gate lints its scripts when the binary is on PATH.
+	# The host bundle's offline gate lints its scripts when shellcheck is on PATH (else SKIP).
+	# No apt-get update: the base image's lists are used as they are, and the step is capped
+	# so it cannot push the environment past its five-minute cache window.
 	step "shellcheck (apt)"
-	if command -v apt-get >/dev/null 2>&1; then
-		(DEBIAN_FRONTEND=noninteractive timeout 180 apt-get install -y -q shellcheck >/dev/null 2>&1 ||
-			(timeout 120 apt-get update -q >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive timeout 180 apt-get install -y -q shellcheck >/dev/null 2>&1)) ||
+	if command -v shellcheck >/dev/null 2>&1; then
+		step "shellcheck already present"
+	elif command -v apt-get >/dev/null 2>&1; then
+		DEBIAN_FRONTEND=noninteractive timeout 90 apt-get install -y -q --no-install-recommends shellcheck >/dev/null 2>&1 ||
 			step "shellcheck refused; run.sh will SKIP its shellcheck suite"
 	else
 		step "no apt-get; shellcheck not placed"
@@ -120,10 +124,10 @@ timeout 120 go version || true
 ) &
 (
 	# Before/after comparison of the fork's Benchmark*Ext runs (perf gate).
-	step "benchstat -> /usr/local/bin"
-	GOBIN=/usr/local/bin timeout 240 go install golang.org/x/perf/cmd/benchstat@latest || step "benchstat refused; the perf gate compares by hand"
+	step "benchstat $BENCHSTAT -> /usr/local/bin"
+	GOBIN=/usr/local/bin timeout 120 go install "golang.org/x/perf/cmd/benchstat@$BENCHSTAT" || step "benchstat refused; the perf gate runs go run golang.org/x/perf/cmd/benchstat@$BENCHSTAT in the session"
 ) &
 wait
 
-step "done: kit $(git -C "$KIT" rev-parse --short=12 HEAD 2>/dev/null || echo absent) · $(go version 2>/dev/null || echo 'go: absent') · gopls $(/usr/local/bin/gopls version 2>/dev/null | head -1 || echo absent) · cached: $(find "$CACHE" -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null)"
+step "done: kit $(git -C "$KIT" rev-parse --short=12 HEAD 2>/dev/null || echo absent) · $(go version 2>/dev/null || echo 'go: absent') · gopls $(/usr/local/bin/gopls version 2>/dev/null | head -1 || echo absent) · cached: $(find "$CACHE" -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null) · shellcheck $(command -v shellcheck >/dev/null 2>&1 && echo yes || echo absent) · benchstat $(test -x /usr/local/bin/benchstat && echo yes || echo absent)"
 exit 0
