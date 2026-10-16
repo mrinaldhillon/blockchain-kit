@@ -35,7 +35,7 @@ GOLANGCI=2.13.2
 GOPLS=v0.23.0
 CACHE=/root/.cache/bsc-geth
 mkdir -p "$CACHE" /usr/local/bin
-export GOTOOLCHAIN="go$GO_VERSION" GOFLAGS=-mod=mod
+export GOTOOLCHAIN="go$GO_VERSION"
 command -v go >/dev/null || export PATH="/usr/local/go/bin:$PATH"
 
 step() { printf '[cloud-setup] %s\n' "$*"; }
