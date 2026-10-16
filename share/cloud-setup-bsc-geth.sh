@@ -24,6 +24,9 @@
 #            and unpack into build/cache/ at each session start; `go install` of the same
 #            version is the fallback when the GitHub release host is refused
 #   modules  `go mod download` when the clone is at hand, time-capped
+#   tools    shellcheck (apt; deploy/production/host/tests/run.sh runs its shellcheck suite
+#            when it is on PATH, else SKIPs) and benchstat (the perf gate of the fork's
+#            hygiene refactor compares Benchmark*Ext before/after); each tolerated absent
 #
 # Every step is `|| true`: a miss costs the session a download, never its start. The
 # versions are bsc-geth's: go.mod `go` and build/checksums.txt `# version:golangci`; the
@@ -33,6 +36,7 @@ set -u
 GO_VERSION=1.27.1
 GOLANGCI=2.13.2
 GOPLS=v0.23.0
+BENCHSTAT=v0.0.0-20261009192801-be2c69fb417e  # golang.org/x/perf; the perf gate parses its table, so pinned
 CACHE=/root/.cache/bsc-geth
 mkdir -p "$CACHE" /usr/local/bin
 export GOTOOLCHAIN="go$GO_VERSION"
@@ -104,7 +108,26 @@ timeout 120 go version || true
 		step "no bsc-geth clone in reach; modules download in the session"
 	fi
 ) &
+(
+	# The host bundle's offline gate lints its scripts when shellcheck is on PATH (else SKIP).
+	# No apt-get update: the base image's lists are used as they are, and the step is capped
+	# so it cannot push the environment past its five-minute cache window.
+	step "shellcheck (apt)"
+	if command -v shellcheck >/dev/null 2>&1; then
+		step "shellcheck already present"
+	elif command -v apt-get >/dev/null 2>&1; then
+		DEBIAN_FRONTEND=noninteractive timeout 90 apt-get install -y -q --no-install-recommends shellcheck >/dev/null 2>&1 ||
+			step "shellcheck refused; run.sh will SKIP its shellcheck suite"
+	else
+		step "no apt-get; shellcheck not placed"
+	fi
+) &
+(
+	# Before/after comparison of the fork's Benchmark*Ext runs (perf gate).
+	step "benchstat $BENCHSTAT -> /usr/local/bin"
+	GOBIN=/usr/local/bin timeout 120 go install "golang.org/x/perf/cmd/benchstat@$BENCHSTAT" || step "benchstat refused; the perf gate runs go run golang.org/x/perf/cmd/benchstat@$BENCHSTAT in the session"
+) &
 wait
 
-step "done: kit $(git -C "$KIT" rev-parse --short=12 HEAD 2>/dev/null || echo absent) · $(go version 2>/dev/null || echo 'go: absent') · gopls $(/usr/local/bin/gopls version 2>/dev/null | head -1 || echo absent) · cached: $(find "$CACHE" -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null)"
+step "done: kit $(git -C "$KIT" rev-parse --short=12 HEAD 2>/dev/null || echo absent) · $(go version 2>/dev/null || echo 'go: absent') · gopls $(/usr/local/bin/gopls version 2>/dev/null | head -1 || echo absent) · cached: $(find "$CACHE" -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null) · shellcheck $(command -v shellcheck >/dev/null 2>&1 && echo yes || echo absent) · benchstat $(test -x /usr/local/bin/benchstat && echo yes || echo absent)"
 exit 0

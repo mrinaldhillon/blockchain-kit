@@ -129,3 +129,10 @@ bsc-geth is developed three ways (operator, 2026-10-14; `blockchain-kit:fork-dev
 Every claim names how it is known: measured (where) or inferred (from what). A node API is
 confirmed against the fork with a `file:line` (`bsc-fork show` in prediction-bot, the source
 in bsc-geth). "Cannot" is a claim like any other: a failed attempt does not establish it.
+A labelled inference does not discharge a recorded field that exists: before a number is
+measured from a stand-in (a proxy event, a derived series, a sampled window), say whether the
+directly recorded source exists, and read it when it does; a decoder it needs is a defect to
+close in the batch, not a cost to avoid. A stand-in that stays names what it misses. The cost
+of the direct path, a capped unit on srv included, never picks the evidence path. A subagent's
+reading is preliminary until the main loop re-runs one cell of it; an inference a subagent
+returns is never forwarded as measured.
