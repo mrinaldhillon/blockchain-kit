@@ -23,7 +23,7 @@ Facts below are pointers into prediction-bot at `main` (READ 2026-10-19). The fi
 | Every `research/queries/*.py` imports `pb_research.seal` and calls the guard, or carries exactly `# infra read: no price, pool, bet or outcome field; no seal guard needed` | `research/test_seal.py:27` (the string), `:73` `test_every_query_script_reads_through_the_seal_or_says_infra`; registry README §10 |
 | A stream first recorded on or after the seal gets its own forward seal (day 0, window 0..20, seal from day 21) | ADR 0146; `seal.py` `STREAM_SEALS`, `forward_seal`, `seal_for`; registry README §7 |
 | `PB_PARQUET_ROOT` picks the Parquet root; default `/data/parquet`, the live ETL tree (`etl.timer`, 02:00 UTC plus a randomized delay; sealed UTC days only) | `research/pb_research/parquet.py:23-29`; `deploy/host/srv/etc/systemd/system/etl.timer` |
-| `/data/parquet-dev`: reflink copies of the pre-seal partitions only, readable without restriction; days are added when the seal moves after an opening | `scripts/dev-snapshot.sh` and its `research/README.md` paragraph: lane B of prediction-bot#1118, not on `main` at 2026-10-19; `ls` the script before citing it |
+| `/data/parquet-dev`: reflink copies of the pre-seal partitions only, readable without restriction; days are added when the seal moves after an opening | `scripts/dev-snapshot.sh` (prediction-bot#1129, on `main` since 2026-10-19) and its `research/README.md` paragraph; `docs/reports/2026-10-19-hardening/dev_snapshot.txt` |
 | Derived tables: `/var/lib/pb-research/tables` (the nightly's unsealed root) and `/var/lib/pb-research/tables-sealed` (the openings' root) | registry README §7 (the research-path read); `seal.tables_sealed_root()` |
 
 **Openings and the calendar rule**
@@ -35,7 +35,16 @@ Facts below are pointers into prediction-bot at `main` (READ 2026-10-19). The fi
 | D = seal start + ⌈400 / expected bets per sealed day⌉, the rate measured on unsealed days only, written as the bullet `- **D = YYYY-MM-DD.**` in `## Test` | `research/registry/r025-tape-thin-side.md` `## Test` (:183-192, the worked case); `seal.READ_DATE_RE` |
 | A D amendment dated before any opening is legitimate; after one it is not | prediction-bot#1118 §Research calendar |
 | The read is one command (`python3 -m pb_research.screen --holdout-read rNNN --date <D>` with both tables roots) after the nightly's slot on D, with pre-read checks on partitions, builder blobs and the pool rule | registry README §7 (the command and the checklist); `screen.run_holdout`; `seal.holdout_read` |
-| The calendar (ADR 0151, prediction-bot#1118 §Research calendar): opening 1 on 2026-10-31 is the research close (span 10-16..10-30; the primary is declared on 2026-10-29 by `research/registry/primary_for_opening.py <D>`, the best W2 lower 95 % bound of per-bet profit among screened entries on the trading process's pool rule; an entry opts out with the `- **Primary-eligible:** no` bullet in `## Holdout`); opening 2 on 2026-11-14 is the production gate (the promoted entry's shadow profit on 10-31..11-13 above zero) and the second wave's read (r026/r027/r028), fallback primary declared 11-12; production switch by about 2026-11-18. As of 2026-10-20 `primary_for_opening.py 2026-10-31` prints none eligible (r029, r030, r032 rejected; r031 screened but opted out: its cut is unreachable in production) | `docs/decisions/0151-*.md`; `research/registry/primary_for_opening.txt`; registry README §7 |
+| The calendar (ADR 0151, prediction-bot#1118 §Research calendar): opening 1 on 2026-10-31 is the research close (span 10-16..10-30; the primary is declared on 2026-10-29 by `research/registry/primary_for_opening.py <D>`, the best W2 lower 95 % bound of per-bet profit among screened entries on the trading process's pool rule; an entry opts out with the `- **Primary-eligible:** no` bullet in `## Holdout`); opening 2 on 2026-11-14 is the production gate (the promoted entry's shadow profit on 10-31..11-13 above zero) and the second wave's read (r026/r027/r028), fallback primary declared 11-12; production switch by about 2026-11-18. As of 2026-10-19 `primary_for_opening.py 2026-10-31` prints none eligible (r029, r030, r032 rejected; r031 screened but opens no holdout: the cut is a production fact, not a research parameter) | `docs/decisions/0151-*.md`; `research/registry/primary_for_opening.txt`; registry README §7 |
+
+**The cut** (operator ruling 2026-10-19: a production fact, never a research parameter)
+
+| Fact | Where |
+|---|---|
+| The decision cut is 150 ms before the header timestamp of the last canonical block whose timestamp precedes the round's lock (L); its lead over the lock varies per round, p10/p50/p90 200/450/600 ms | ADR 0120; `research/queries/grid_cut.txt` §1 |
+| The research default from 2026-10-19 is that cut, `CUT_RULE_GRID = "grid_L_minus_150ms"`, built as the root `/var/lib/pb-research/tables-grid` (114 pre-seal days, rounds/bets/wallets linked to the nightly root); lock − 400 ms (`DEFAULT_CUT_LEAD_MS`) is the legacy stand-in kept only for r023's and r025's registered reads | `research/pb_research/tables/common.py`; `research/queries/grid_cut.py` (`cuts`, `report`, `sealed-grid` stages) |
+| Every result produced on the stand-in or on `POOLCUT_KEEP_RECEIVED` is `skewed`: 24 of 24 tested results as of 2026-10-19; no strategy is built on one | `research/queries/inherited_inputs_audit.txt`; `research/notes/2026-10-19-inherited-inputs-audit.md`; registry README §9 |
+| No cut comparison of any kind is in scope | the ruling; r031's `## Holdout` |
 
 **Pool rules** (`research/pb_research/features/_poolcut.py:301-320`)
 
@@ -89,6 +98,6 @@ Sources: `research/README.md` §Linting / type-checking; `research/pyproject.tom
 
 **What only this skill says**
 - The nightly (`research/nightly.py`, `pb-research-nightly.timer` 03:00 UTC) runs from the main checkout: keep it clean on `main`, do all branch work in `.claude/worktrees/`, never `cd` into the main checkout from a worktree, never a bare `git stash`.
-- Python that reads data runs with `-I`. Long runs go through `dev-setup/ci/unit_run.py` or `scripts/replay-run.sh`; never wait with `sleep`.
+- Python that reads data runs with `-I`. From a worktree, `python3 -I -m pb_research…` imports the MAIN checkout's package through the shared venv's editable finder (`PYTHONPATH` is ignored under `-I`), so a table root built that way is stamped with main's builder blobs: run the worktree's module path explicitly and check the blobs in `_meta.json` (lane G, 2026-10-19). Long runs go through `dev-setup/ci/unit_run.py` or `scripts/replay-run.sh`; never wait with `sleep`.
 - An infra read on a sealed day (kinds, stream names, StreamSeq, wall times, record counts, column names) is allowed and says so with the exact comment; anything else on a sealed day goes through the registered holdout path or not at all.
 - A segment, a decision or a redeploy: `blockchain-kit:round-forensics`.
