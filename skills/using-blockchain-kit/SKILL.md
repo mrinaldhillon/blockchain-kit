@@ -23,6 +23,8 @@ anything here.
 | Binance market data: SBE, aggTrade, depth snapshots, reconnect, the proxy | `blockchain-kit:binance-streams` |
 | The event log: framing, CRC, envelope, `EventKind`, the control stream | `blockchain-kit:record-format` |
 | Replay, the parity gate, a golden that moved | `blockchain-kit:replay-parity` |
+| Any work under prediction-bot's `research/`: a query, an entry, a screen, a holdout read, the seal, the registry, the nightly | `blockchain-kit:research-surface` |
+| Reading a round or a decision from the archive, verifying a redeploy, the post-deploy check, a deprecation record | `blockchain-kit:round-forensics` |
 | A diff in `internal/{event,eventlog,trigger,strategy,state,replay,executor}` | `blockchain-kit:hot-path-determinism`, then the `blockchain-kit:determinism-auditor` agent |
 | Endpoints, IPC or WebSocket, `PB_ENV`, a test that must run offline | `blockchain-kit:environment-detection` |
 | A multi-step change, cutting units, landing; what a change owes by class | `blockchain-kit:working-here` |

@@ -103,6 +103,8 @@ The class is read off the diff and decides the ceremony. The last two rows are b
   hands back.
 - On a Fable main loop the advisor is called only to attack an inference you have stated:
   give your read first and stand on it (operator, 2026-09-17).
+- The advisor is consulted before a workflow or an execution loop is spawned: the plan it
+  would run is the inference it attacks (operator, 2026-10-19).
 
 ## The fork
 
