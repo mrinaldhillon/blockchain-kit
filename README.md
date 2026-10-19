@@ -33,7 +33,7 @@ read by the main loop and `make replay-parity` when owed.
 |---|---|
 | `skills/working-here` | the process and the change classes |
 | `skills/using-blockchain-kit` | the routing table, given at session start |
-| `skills/` (bot) | `go`, `fork-lookup`, `fork-node-api`, `contract-abi`, `binance-streams`, `record-format`, `replay-parity`, `hot-path-determinism`, `environment-detection` |
+| `skills/` (bot) | `go`, `fork-lookup`, `fork-node-api`, `contract-abi`, `binance-streams`, `record-format`, `replay-parity`, `hot-path-determinism`, `environment-detection`, `research-surface`, `round-forensics` |
 | `skills/` (fork) | `fork-development`, `fork-ext-convention`, `fork-deploy`, `campaign`, `upstream-rebase` |
 | `agents/` | `golang-implementer`, `code-reviewer`, `determinism-auditor`, `parity-auditor`, `fork-indexer`, `fixture-capturer`, `infra-profiler`. None runs above opus |
 | `workflows/implement.js` | `blockchain-kit:implement`: Lane → Integrate → Gate → Review → Fix → Re-gate. Its header is the contract of its `args` and its return |
