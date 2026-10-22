@@ -72,10 +72,13 @@ nothing. A kit skill's mode is its own frontmatter, changed in a kit commit and 
 | on | `description:` the full when-to-load text |
 | name-only | `description:` one line naming what the skill covers. The routing table the session-start hook injects says when to load it; the full text is the body's **When to load** line |
 | user-invocable-only | `disable-model-invocation: true`: hidden from the model, `/blockchain-kit:<name>` still runs. Never on a skill an agent preloads (`skills:` in `agents/`) or a workflow unit names: the flag blocks both |
+| model-only | name-only plus `user-invocable: false`: off the `/` menu; the model and a subagent still load it by name |
 | off | the skill deleted |
 
-Every skill is name-only except `upstream-rebase`, which is user-invocable-only. A mode holds for
-every repository: each project's install of one kit commit shares one cache directory.
+Every skill is name-only except `upstream-rebase`, which is user-invocable-only, and
+`using-blockchain-kit`, which is model-only: the session-start hook already puts its body in the
+session, so a `/` entry would only load it twice. A mode holds for every repository: each
+project's install of one kit commit shares one cache directory.
 
 ## Enabling it in a project
 
