@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import re
+import socket
 import subprocess
 import sys
 import tempfile
@@ -27,14 +28,16 @@ class Gate(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.tmp = Path(os.path.realpath(tmp.name))
 
-    def env(self) -> dict[str, str]:
+    def env(self, **more: str) -> dict[str, str]:
         env = {k: v for k, v in os.environ.items() if not k.startswith("BLOCKCHAIN_KIT_")}
         env["TMPDIR"] = str(self.tmp)
+        env["BLOCKCHAIN_KIT_IPC"] = str(self.tmp / "absent.ipc")  # a dev host, whatever host runs the suite
+        env.update(more)
         return env
 
-    def gate(self, *argv: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run([str(GATE), *argv], capture_output=True, text=True, env=self.env(), cwd=self.tmp,
-                              timeout=30, check=False)
+    def gate(self, *argv: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+        return subprocess.run([str(GATE), *argv], capture_output=True, text=True, env=env or self.env(),
+                              cwd=self.tmp, timeout=30, check=False)
 
     def verdict(self, done: subprocess.CompletedProcess[str], name: str, rc: int) -> list[str]:
         """Asserts the first stdout line is the verdict; returns the lines after it."""
@@ -94,6 +97,60 @@ class Gate(unittest.TestCase):
         done = self.gate("--help")
         self.assertEqual(done.returncode, 0)
         self.assertIn("gate: <name> rc=<n> t=<S>s out=<path>", done.stdout)
+
+
+    def test_on_the_production_host_a_gate_runs_inside_its_trees_cap(self):
+        # The invariant: on the host that runs geth and the collectors, a gate never runs outside the cap its
+        # repository ships; on any other host, or with the switch off, bk-gate is what it always was.
+        ipc = self.tmp / "geth.ipc"
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.addCleanup(sock.close)
+        back = os.getcwd()
+        os.chdir(self.tmp)  # bind by a relative name: AF_UNIX paths stop at 108 bytes
+        try:
+            sock.bind(ipc.name)
+        finally:
+            os.chdir(back)
+        fake = '#!/bin/sh\nprintf "%s\\n" "$0" "$@" > "$CAP_LOG"\n[ "$1" = "--" ] && shift\nexec "$@"\n'
+
+        def tree(name: str, *, tool: str | None = None, source: bool = False) -> Path:
+            root = self.tmp / name
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                            "--allow-empty", "-m", "i"], check=True)
+            if source:
+                (root / "cmd/verifyconstrained").mkdir(parents=True)
+                (root / "cmd/verifyconstrained/main.go").write_text("package main\n")
+            if tool:
+                (root / tool).parent.mkdir(parents=True, exist_ok=True)
+                (root / tool).write_text(fake)
+                (root / tool).chmod(0o755)
+            return root
+
+        pb = tree("pb", tool="dev-setup/ci/ci-cap.sh")
+        bsc = tree("bsc", tool="build/bin/verifyconstrained", source=True)
+        lane = self.tmp / ".bsc.worktrees/wf_1"  # a lane beside the clone: the source, not the built binary
+        subprocess.run(["git", "-C", str(bsc), "worktree", "add", "-q", "--detach", str(lane)], check=True)
+        (lane / "cmd/verifyconstrained").mkdir(parents=True)
+        (lane / "cmd/verifyconstrained/main.go").write_text("package main\n")
+        plain = tree("plain")
+        prod = {"BLOCKCHAIN_KIT_IPC": str(ipc)}
+        cases = [  # (case, -C tree, env, the tool that ran it or None, what stderr says)
+            ("pb on prod", pb, prod, pb / "dev-setup/ci/ci-cap.sh", "capped by dev-setup/ci/ci-cap.sh"),
+            ("bsc on prod", bsc, prod, bsc / "build/bin/verifyconstrained", "capped by"),
+            ("a bsc lane on prod", lane, prod, bsc / "build/bin/verifyconstrained", "capped by"),
+            ("no cap tool on prod", plain, prod, None, "running uncapped"),
+            ("pb on a dev host", pb, {}, None, ""),
+            ("pb on prod, switched off", pb, {**prod, "BLOCKCHAIN_KIT_GATE_CAP": "0"}, None, ""),
+        ]
+        for case, root, more, tool, said in cases:
+            log = self.tmp / f"cap-{len(case)}-{case[:3]}.argv"
+            done = self.gate("-C", str(root), "t", "--", PY, "-c", "print('ran'); raise SystemExit(3)",
+                             env=self.env(CAP_LOG=str(log), **more))
+            self.assertEqual(self.verdict(done, "t", 3), ["ran"], case)
+            self.assertEqual(log.read_text().splitlines()[:2] if log.exists() else None,
+                             [str(tool), "--"] if tool else None, case)
+            self.assertIn(said, done.stderr, case) if said else self.assertEqual(done.stderr, "", case)
 
 
 if __name__ == "__main__":

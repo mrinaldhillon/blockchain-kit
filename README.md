@@ -41,7 +41,7 @@ read by the main loop and `make replay-parity` when owed.
 | `commands/init.md` | `/blockchain-kit:init`, once per project; reports, changes nothing |
 | `output-styles/` | `distinguished-engineer`, forced for the plugin: the project sets no `outputStyle` |
 | `bin/bsc-fork` | `pin`, `show`, `search`, `list`, `check`, `path` |
-| `bin/bk-gate` | `bk-gate [-C DIR] <name> -- <command>`: one verdict line, the last ten lines on red, the command's exit code |
+| `bin/bk-gate` | `bk-gate [-C DIR] <name> -- <command>`: one verdict line, the last ten lines on red, the command's exit code. On the production host the command runs inside its repository's cap (pb `dev-setup/ci/ci-cap.sh`, bsc-geth `cmd/verifyconstrained`) |
 | `bin/bk-mainloop-share` | what main-loop turns were spent on, by category: the kit's one metric |
 | `bin/bk-statusline` | the status line: the session (model, context, rate limits, cache, cost) and the place (branch, PR, PROD, the fork pin and checkout, the kit's SHA) |
 | `bin/blockchain-kit-context` | the session-start hook, in prediction-bot and in a bsc-geth clone: routing table, pin and checkout lines (prediction-bot only), the kit's SHA, the host, and what is out of place (git guard unarmed, steering files outside the kit) |

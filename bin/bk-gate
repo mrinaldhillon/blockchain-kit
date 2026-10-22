@@ -25,10 +25,21 @@ Contract:
      absent) prints `gate: <name> rc=127 t=<S>s out=-`, the OS error on one stderr
      line, and exits 127. When the out file cannot be written the line says out=-,
      stderr says why, and the rc is still the command's.
+  5. On the production host (lib/bkhost.py: the geth IPC path is a socket) the command
+     runs inside the cap of the tree it runs in, found from DIR's git top level:
+       prediction-bot  dev-setup/ci/ci-cap.sh -- <command>        (a capped scope)
+       bsc-geth        <bin> -- <command>, <bin> the built cmd/verifyconstrained in
+                       build/bin/ of this tree or of the main clone, else
+                       `go run <tree>/cmd/verifyconstrained` (which reads every
+                       failure as rc 1)
+     and says which on one stderr line. A tree with neither runs bare, and stderr says
+     it ran uncapped. The verdict line and the out file are unchanged: the cap tool's
+     own lines, a refusal included, are part of the output.
 
 A usage error (no name, no `--`, no command, an unknown leading option) prints one
 `bk-gate: ...` line on stderr and no verdict line.
 
+Env:  BLOCKCHAIN_KIT_GATE_CAP=0 never wraps · BLOCKCHAIN_KIT_IPC names the IPC path probed.
 Exit: the command's rc · 128+N killed by signal N · 127 not spawned · 2 usage.
 """
 
@@ -41,8 +52,14 @@ import sys
 import time
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
 UNSAFE = re.compile(r"[^A-Za-z0-9_.-]")
 TAIL = 10
+PB_CAP = Path("dev-setup/ci/ci-cap.sh")
+BSC_CAP = Path("cmd/verifyconstrained")
+BSC_CAP_BIN = Path("build/bin/verifyconstrained")
 
 
 class Usage(Exception):
@@ -72,6 +89,36 @@ def parse(argv: list[str]) -> tuple[str | None, str, list[str]] | None:
     return cwd, name, command
 
 
+def capped(command: list[str], cwd: str | None) -> tuple[list[str], str]:
+    """(the argv to run, the stderr note or ''): the command inside its tree's cap on the production host."""
+    if os.environ.get("BLOCKCHAIN_KIT_GATE_CAP") == "0" or (cwd is not None and not os.path.isdir(cwd)):
+        return command, ""
+    import bkhost
+    import bkworktree as wt
+
+    if not bkhost.prod_host():
+        return command, ""
+    try:
+        root = wt.session_tree(Path(cwd or os.getcwd()))
+    except (wt.WorktreeError, OSError, subprocess.SubprocessError):
+        root = None
+    if root is not None and (root / PB_CAP).is_file():
+        return [str(root / PB_CAP), "--", *command], f"capped by {PB_CAP}"
+    if root is not None and (root / BSC_CAP / "main.go").is_file():
+        trees = [root]
+        try:
+            trees.append(wt.main_clone(root))
+        except (wt.WorktreeError, OSError, subprocess.SubprocessError):
+            pass
+        for tree in trees:
+            built = tree / BSC_CAP_BIN
+            if built.is_file() and os.access(built, os.X_OK):
+                return [str(built), "--", *command], f"capped by {built}"
+        return (["go", "run", str(root / BSC_CAP), "--", *command],
+                f"capped by go run {BSC_CAP} (no built binary; a failure reads rc 1)")
+    return command, "production host and no cap tool in this tree: running uncapped"
+
+
 def emit(text: str) -> None:
     sys.stdout.buffer.write(text.encode("utf-8", "surrogateescape") + b"\n")
 
@@ -86,6 +133,9 @@ def main(argv: list[str]) -> int:
         print((__doc__ or "").strip())
         return 0
     cwd, name, command = parsed
+    command, note = capped(command, cwd)
+    if note:
+        print(f"bk-gate: {name}: {note}", file=sys.stderr)
 
     started = time.monotonic()
     try:
