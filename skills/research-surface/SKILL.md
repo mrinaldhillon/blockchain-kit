@@ -97,7 +97,7 @@ Sources: `research/README.md` §Linting / type-checking; `research/pyproject.tom
 | Undecoded recorded fields are a listed gap, never an unknown | `research/queries/decode_inventory.py` and `.txt` |
 
 **What only this skill says**
-- The nightly (`research/nightly.py`, `pb-research-nightly.timer` 03:00 UTC) runs from the main checkout: keep it clean on `main`, do all branch work in `.claude/worktrees/`, never `cd` into the main checkout from a worktree, never a bare `git stash`.
+- The nightly (`research/nightly.py`, `pb-research-nightly.timer` 03:00 UTC) runs from the main checkout: keep it clean on `main`, do all branch work in a worktree the harness makes (`claude -w`, EnterWorktree, an agent with isolation `worktree`), which the kit places beside the clone; never a hand `git worktree add` under `.claude/worktrees/`, never `cd` into the main checkout from a worktree, never a bare `git stash`.
 - Python that reads data runs with `-I`. From a worktree, `python3 -I -m pb_research…` imports the MAIN checkout's package through the shared venv's editable finder (`PYTHONPATH` is ignored under `-I`), so a table root built that way is stamped with main's builder blobs: run the worktree's module path explicitly and check the blobs in `_meta.json` (lane G, 2026-10-19). Long runs go through `dev-setup/ci/unit_run.py` or `scripts/replay-run.sh`; never wait with `sleep`.
 - An infra read on a sealed day (kinds, stream names, StreamSeq, wall times, record counts, column names) is allowed and says so with the exact comment; anything else on a sealed day goes through the registered holdout path or not at all.
 - A segment, a decision or a redeploy: `blockchain-kit:round-forensics`.
