@@ -12,8 +12,8 @@ This command is the user's request to run the workflow. The contract of its inpu
 is the header of `workflows/implement.js`; the process around it is `blockchain-kit:working-here`.
 
 1. **The units.** Each is `{id, brief, packages, skills?}`. The brief is the contract: the
-   files, the interfaces with exact signatures, the test cases with their assertions, the
-   invariants. If the conversation does not already hold units in that shape, write them now
+   files, the interfaces with exact signatures, the invariants each test protects, and the
+   Tests line every brief carries (`blockchain-kit:working-here`, step 3). If the conversation does not already hold units in that shape, write them now
    and show them before launching. Two units never share a package: split differently, or run
    them as two runs.
 2. **Preconditions**, one Bash call each; stop and say which failed:

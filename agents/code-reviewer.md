@@ -27,7 +27,8 @@ The brief names a range (`<base>..HEAD`) and a tree. The diff is read whole:
 2. Read each changed file at `HEAD`, not only its hunks: a defect is usually in how the change
    meets the code around it.
 3. The briefs of the units that produced the diff are the contract. A change the contract does
-   not ask for is a finding. A contract line with no code or test behind it is a finding.
+   not ask for is a finding. A contract line with no code behind it is a finding; a test is
+   owed per invariant the brief names, not per contract line.
 
 ## Method: two passes, the second one reports
 
@@ -39,6 +40,11 @@ scenario.
 - Per branch: the state it handles and the state that falls through unhandled.
 - Per test: the change to the code that would leave it green. A test no plausible defect turns
   red is a finding. `-count=1` is absent from a parity or determinism test command: a finding.
+- Template breadth, a `minor` finding (pb `docs/discipline.md` rule 47): one test per brief
+  row, counter, arm or struct field where one table-driven test covers the shape; an
+  argument-parsing or label-format test; a test asserting a count the next legitimate change
+  must edit; a test file named after the milestone that wrote it rather than the subject it
+  protects; a test the change made dead and left in place.
 - Per deleted or replaced line: the behaviour it enforced, and where the new code re-establishes
   it.
 - Callers and callees: a new precondition, a changed return shape, a new error value, an
