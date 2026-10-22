@@ -23,7 +23,7 @@ session-start line names it) and is not the rule. The fork's steering is this sk
 | `blockchain-kit:fork-deploy` | anything under `deploy/production/**` |
 | `blockchain-kit:campaign` | the measurement campaign (`cmd/campaign`, `bsc-campaign.timer`) |
 | `blockchain-kit:upstream-rebase` | moving the fork to a new upstream tag |
-| bsc-geth `docs/fork-features.md` | what the fork adds, feature by feature, before changing one (`references/features.md` points there) |
+| the fork's feature inventory (its docs index, `docs/fork/README.md`, lists it) | what the fork adds, feature by feature, before changing one (`references/features.md` points there) |
 
 ## The two roots
 
@@ -84,7 +84,7 @@ The fork is a node: it serves data and accepts transactions. The bot decides. A 
 goes in the fork when it needs the node's internals (the txpool, the p2p layer, the
 block import path, a new RPC or feed field). Everything that is policy, strategy,
 sizing or parsing of a served value goes in the bot. A new fork surface is a contract:
-it is named under the `Ext` convention, specified in the fork's `docs/specs/`, and the
+it is named under the `Ext` convention, specified among the fork's shipped contracts, and the
 bot reads it through `internal/nodeapi` (`blockchain-kit:fork-node-api`).
 
 ## What the fork is
@@ -187,28 +187,10 @@ Standard geth layout — only the non-obvious wiring matters here:
 
 ## Map of the fork's docs
 
-Pointers only — each document owns its content. Paths are in the fork tree.
-
-- `docs/fork-features.md` — the feature inventory: what the fork adds, feature by feature.
-- `docs/specs/` — contracts as shipped. `bot-feed-contract-v1.md` is the bot-facing
-  feed/send/readiness wire contract.
-- `docs/upstream-rebase-landmines.md` — what the next upstream rebase must not break
-  (`blockchain-kit:upstream-rebase`).
-- `docs/superpowers/` — design records and plans of the past; no new plan or spec is tracked.
-- `docs/PROJECT_CONTEXT.md` — milestone state, settled rulings ("decided — do not reopen"), and
-  the verified facts that are expensive to re-derive (what's red on pristine upstream, the
-  `bsc/2` capability floor, the measured peer-churn cause). Read it before re-opening a
-  design question or re-running an investigation.
-- `docs/adr/` — decisions and agreed working guidance from 2026-09-17 on, one numbered file
-  each.
-- `deploy/production/probes/` — the hand-run live-node probes that seed the health suite.
-- `docs/FORK_NAMING_CONVENTION.md` — the `Ext` marker and file-placement rules in full.
-- `deploy/production/README.md` — the reasoning behind every installed number;
-  `deploy/production/host/README.md` — the host bundle (manifest, installer, verifier, tests);
-  `deploy/production/CUTOVER_RUNBOOK.md` — the wiped-host rebuild; `deploy/production/REDEPLOY_RUNBOOK.md`
-  — redeploying onto the running host with prediction-bot sequenced in.
-- `cmd/campaign/README.md` — the measurement campaign (`blockchain-kit:campaign`).
-- `docs/parlia/`, `docs/audits/`, `docs/postmortems/`, `docs/reviews/` — consensus notes and
-  the historical record.
-- `docs/go-runtime-diagnostics.md` — sanitizers, race detector, leak/contention profiles,
-  execution trace and flight recorder: what each costs and which run on this node.
+The fork keeps its own map: `docs/fork/README.md`, one line per document under `docs/fork/`
+(rules and state, contracts, decisions, history) and the documents elsewhere in its tree
+(`deploy/production/`, each `cmd/<tool>/README.md`). Read it there; the kit names a fork
+document by what it is and carries this one path. Two to read before acting: the project
+context (milestone state, settled rulings, facts expensive to re-derive) before re-opening a
+design question or re-running an investigation, and the feature inventory before changing a
+feature.

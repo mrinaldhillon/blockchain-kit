@@ -56,8 +56,8 @@ Consequences:
 - A kit skill is a **router**: when to load, which repo doc holds the facts, which command
   answers the question. It does not carry a copy of the facts. `fork-development`'s
   `references/features.md` and `upstream-rebase`'s `references/landmines.md` were copies; they
-  are pointers to bsc-geth `docs/fork-features.md` and `docs/upstream-rebase-landmines.md`
-  since 2026-10-14. The pb domain skills keep only what is not already in pb `docs/`.
+  are pointers to bsc-geth's feature inventory and rebase landmines since 2026-10-14. The kit
+  carries one fork docs path, the fork's index `docs/fork/README.md` (kit #31). The pb domain skills keep only what is not already in pb `docs/`.
 - A guard that fires only inside Claude Code never protected against a human. The
   main-branch guard is already `dev-setup/githooks/reference-transaction` plus branch
   protection (measured), so pb's `main_guard.py` hook is not carried.
@@ -88,7 +88,7 @@ bsc-geth keeps pb's shape (decided, 2026-10-09; confirmed 2026-10-14). This supe
 
 | File | Content |
 |---|---|
-| `CLAUDE.md` | Project facts only, cut by kind as pb's was. The fork's feature inventory moves to `docs/fork-features.md`, the next rebase's landmines to `docs/upstream-rebase-landmines.md`, and the on-host `cmd/campaign` command line to `cmd/campaign/README.md`. |
+| `CLAUDE.md` | Project facts only, cut by kind as pb's was. The fork's feature inventory and the next rebase's landmines move to their own documents under `docs/fork/` (its index, `docs/fork/README.md`, lists them), and the on-host `cmd/campaign` command line to `cmd/campaign/README.md`. |
 | `.claude/settings.json` | The kit enabled at project scope, as pb's, with `worktree.baseRef: "head"`. Nothing else is tracked under `.claude/`. |
 | `.mcp.json` | Kept; names `gopls`. |
 
@@ -307,7 +307,7 @@ The main loop does the intelligent work and nothing repetitive:
 2. **Persist work as issues.** An issue body, in the repo the work is in, carries the units
    still to do. No plan file, spec file, ledger or resume file is tracked in either repo.
    Milestone state stays where each repo already keeps it: pb `docs/project-context.md`,
-   bsc-geth `docs/PROJECT_CONTEXT.md`.
+   bsc-geth's project context (listed in its docs index, `docs/fork/README.md`).
 3. **Run `/blockchain-kit:implement`** with the units. The run is in the background. In a
    bsc-geth root it runs in place (§7).
 4. **Adjudicate the result**: hand-backs, conflicts, open findings, the owed reads and the
@@ -343,8 +343,8 @@ Rules that follow:
 
 - **One branch per change, whatever it touches.** Code, its docs and its tooling land
   together. No branch is cut per file category.
-- **An ADR records a decision about the product**, in pb `docs/decisions/` or bsc-geth
-  `docs/adr/`. A prose edit, a
+- **An ADR records a decision about the product**, in pb `docs/decisions/` or the ADR
+  directory bsc-geth's docs index (`docs/fork/README.md`) names. A prose edit, a
   tooling change and any change to the kit never get one.
 - **A fact has one home, so a change has one edit.** The mirrors go with the layer: roster
   tables, index files, the skill manifest, tracking rows, the lockstep files and the lints

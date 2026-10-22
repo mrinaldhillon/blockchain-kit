@@ -176,6 +176,8 @@ const TIERS = Object.assign({ lane: 'opus', integrate: 'sonnet', gate: 'haiku', 
 
 const git = remote ? `git -C "${remote}"` : 'git'
 const tree = remote ? `the fork checkout ${remote}` : "the repository root (the session's tree, not a worktree)"
+// The fork's docs index, the one fork path the kit carries: absolute, since a remote run's reviewer sits in the client.
+const forkIndex = remote || project ? `${bare(remote || project)}/docs/fork/README.md` : 'docs/fork/README.md'
 const normPkg = (p) => String(p).replace(/^\.\//, '').replace(/\/\.\.\.$/, '').replace(/\/+$/, '')
 const pkgsOf = (unit) => (Array.isArray(unit.packages) ? unit.packages.map(normPkg).filter(Boolean) : [])
 // A lane reports a full SHA and the caller may pass a short one.
@@ -434,7 +436,7 @@ if (gateCmd) {
 // Review. One seat over the whole merged range.
 const apiRule = forkWork
   ? `This is the bsc-geth fork: the four prediction-bot angles do not apply; the Ext convention and the rebase ` +
-    `landmines (the fork's docs/upstream-rebase-landmines.md) do. `
+    `landmines do; the fork's docs index, ${forkIndex}, names the landmines document. `
   : `A go-ethereum API in the diff resolves to the pinned fork: check it with \`bsc-fork show <Symbol>\`. `
 let review = null
 try {

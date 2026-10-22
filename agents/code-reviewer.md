@@ -72,9 +72,10 @@ not apply. Two take their place:
   load): every fork-added durable surface ends in `Ext` and lives in a `*_ext.go` file.
   Upstream provenance is settled by `git show v1.7.8:<path>` (from prediction-bot,
   `git -C <fork> show …`), never by the suffix.
-- **Rebase cost and landmines**, whose home is the fork's
-  `docs/upstream-rebase-landmines.md`: an edit that deletes or restructures upstream lines,
-  or touches a declaration that doc names, is a finding.
+- **Rebase cost and landmines**, whose home is the fork's rebase-landmines document (its docs
+  index, `docs/fork/README.md` under the fork tree the brief names, lists it): an edit that
+  deletes or restructures upstream lines, or touches a declaration that document names, is a
+  finding.
 
 **Pass 2, verify.** Argue against each candidate. Keep it when you can name the inputs or state
 that trigger it and the wrong result, or when the mechanism is real and the trigger depends on

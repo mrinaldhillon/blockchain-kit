@@ -8,9 +8,9 @@ description: "The fork's Ext marker, *_ext.go placement and make audit-ext."
 # The fork's `Ext` convention — read this before editing anything in the fork
 
 bsc-geth is a fork of bnb-chain/bsc (base tag `v1.7.8`) kept cheap to rebase. This is the
-single most important rule in that tree. Full spec, in the fork tree:
-**`docs/FORK_NAMING_CONVENTION.md`**. It applies to the fork only: prediction-bot's own
-code takes no `Ext` suffix.
+single most important rule in that tree. Full spec, in the fork tree: its
+**naming convention**, which the fork's docs index `docs/fork/README.md` lists. It applies to
+the fork only: prediction-bot's own code takes no `Ext` suffix.
 
 - **`Ext` is the only fork marker.** Every *durable* fork-local surface added inside a package
   that also exists upstream ends with `Ext`: exported symbols, struct fields (**and their
