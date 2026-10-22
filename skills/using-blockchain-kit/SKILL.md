@@ -1,6 +1,7 @@
 ---
 name: using-blockchain-kit
 description: "The routing table: which kit skill, agent or command to load, and when. A subagent that writes Go loads it."
+user-invocable: false
 ---
 
 # Using blockchain-kit

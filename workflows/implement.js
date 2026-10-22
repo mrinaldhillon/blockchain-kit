@@ -2,7 +2,7 @@ export const meta = {
   name: 'implement',
   description: 'Briefed Go units: parallel worktree lanes → one merged run branch → gate → one review → one fix round.',
   whenToUse:
-    'When several independent units of Go work are already briefed, each with its own packages, and would otherwise be driven implement → merge → gate → review → fix from the main loop. Not for exploratory work, a one-off edit, or writing the plan itself.',
+    'Several independent units of Go work, each already briefed with its own packages. Not for exploratory work, a one-off edit, or writing the plan.',
   phases: [
     { title: 'Lane', detail: 'one implementer per unit, each in its own worktree, committing on its lane branch', model: 'opus' },
     { title: 'Integrate', detail: 'merge the lane branches into the run branch in unit order; remove what merged', model: 'sonnet' },
