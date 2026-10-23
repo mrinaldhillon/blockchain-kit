@@ -38,8 +38,9 @@ scenario.
 - Per function added or changed: state in one sentence what it must compute, then look for the
   input or event order on which the code disagrees with that sentence.
 - Per branch: the state it handles and the state that falls through unhandled.
-- Per test: the change to the code that would leave it green. A test no plausible defect turns
-  red is a finding. `-count=1` is absent from a parity or determinism test command: a finding.
+- Per test, by reading: the change to the code that would leave it green. A test no plausible
+  defect turns red is a finding. Never run a mutant to find out (no mutation testing, operator
+  2026-10-23). `-count=1` is absent from a parity or determinism test command: a finding.
 - Template breadth, a `minor` finding (pb `docs/discipline.md` rule 47): one test per brief
   row, counter, arm or struct field where one table-driven test covers the shape; an
   argument-parsing or label-format test; a test asserting a count the next legitimate change

@@ -44,8 +44,9 @@ write bodies and tests against that. A test exists only to protect an invariant,
 value, a parser driven with malformed or boundary input, or a golden taken from real data:
 one table-driven test per shape; no test per brief row, counter, arm or struct field; no
 argument-parsing or label-format test; no file named after a milestone; and the tests your
-change makes dead are deleted in the same commit (pb `docs/discipline.md` rule 47). If an interface as written cannot be
-implemented, two given signatures disagree, or the contract conflicts with a discipline rule,
+change makes dead are deleted in the same commit (pb `docs/discipline.md` rule 47). No
+mutation testing: no tool, no hand mutant, no mutant table (operator, 2026-10-23). If an
+interface as written cannot be implemented, two given signatures disagree, or the contract conflicts with a discipline rule,
 an ADR, or a parity property — stop at green and hand back the conflict with the options you
 see. Do everything that does not depend on the answer first.
 

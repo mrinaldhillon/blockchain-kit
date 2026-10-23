@@ -88,6 +88,10 @@ The class is read off the diff and decides the ceremony. The last two rows are b
   that timeout the harness moves it to the background and notifies on exit, and a background
   start costs one more model request. `build/unit_run.py --wait <slug>` on srv is such a call.
   Never wait with `sleep` or a poll loop.
+- **No mutation testing** (operator, 2026-10-23): no mutation tool, no hand mutant run against
+  a suite to prove a test can fail, and no mutant table in a test. It multiplies test runs and
+  tokens and stacks tests on tests; a test's worth is argued from what it protects (the brief's
+  Tests line), by reading.
 - **One gate command, one line:** `bk-gate <name> -- <command>` prints `gate: <name> rc=<n>
   t=<s>s out=<path>` and, on red, the last ten lines. Never pipe a gate into `tail` or `grep`.
 
