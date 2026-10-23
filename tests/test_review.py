@@ -96,6 +96,25 @@ class Review(unittest.TestCase):
         self.assertEqual(ran["result"]["error"], "the intent seat returned nothing")
         self.assertEqual(self.labels(ran), ["intent"])
 
+    def test_a_contract_in_doubt_pauses_after_intent(self):
+        blocker = {"title": "no restart path", "severity": "blocker", "why": "w", "scenario": "s"}
+        for what, seat, why in [
+            ("derived", intent(derived=True), ["no source stated the contract: it was worked out from the diff"]),
+            ("empty", intent(contract=[]), ["no source stated the contract: it was worked out from the diff"]),
+            ("a blocker in its logic", intent(sanity=[blocker]), ["the logic itself: no restart path"]),
+        ]:
+            with self.subTest(case=what):
+                ran = self.run_script(args(), {"intent": seat})
+                out = ran["result"]
+                self.assertEqual(self.labels(ran), ["intent"])
+                self.assertEqual((out["paused"], out["why"]), (True, why))
+                self.assertEqual(out["sanity"], seat["sanity"])
+                self.assertIn("proceed: true", out["next"])
+                gone_on = self.run_script(args(proceed=True), {"intent": seat})
+                self.assertEqual(self.labels(gone_on)[:4], ["intent", *THREE])  # then the sanity findings' checker
+        major = {**blocker, "severity": "major"}
+        self.assertEqual(self.labels(self.run_script(args(), {"intent": intent(sanity=[major])}))[:2], ["intent", CONF])
+
     def test_the_finder_count_follows_the_diff_size(self):
         for lines, finders in [
             (40, THREE),
@@ -138,7 +157,7 @@ class Review(unittest.TestCase):
         self.assertIn("do not raise them again:\n- no reorg handling", prompt)
         self.assertIn("before judging: blockchain-kit:go, blockchain-kit:record-format.", prompt)
         self.assertNotIn("a hypothesis, not a spec", prompt)
-        derived = self.prompt(self.run_script(args(), {"intent": intent(derived=True)}), THREE[1])
+        derived = self.prompt(self.run_script(args(proceed=True), {"intent": intent(derived=True)}), THREE[1])
         self.assertIn("a hypothesis, not a spec", derived)
 
     def test_the_mode_picks_the_domain_angle(self):
@@ -167,7 +186,7 @@ class Review(unittest.TestCase):
                                    verdict("K5", "confirmed", "major"), verdict("K6", "CONFIRMED")),
             "check:" + B: None,
         })
-        ran = self.run_script(args(), given)
+        ran = self.run_script(args(proceed=True), given)
         self.assertEqual([lbl for lbl in self.labels(ran) if lbl.startswith("check")],
                          ["check:contract", "check:" + A, "check:" + B])
         a_prompt = self.prompt(ran, "check:" + A)
