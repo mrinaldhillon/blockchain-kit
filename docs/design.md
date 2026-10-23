@@ -129,7 +129,7 @@ and branch protection on `main` requires `ci` and `steering`, strict, admins inc
 |---|---|---|
 | `golang-implementer` | opus | Drops `LSP` from `tools:` (it is never in the live roster — measured). Its "never `git commit`; a brief cannot lift that" rule is replaced by the lane contract (§7): at `6796a58` both probe lanes refused to commit against the brief (measured). Absorbs `golang-implementer-lite`, which is deleted: implementation runs at opus (decided). |
 | `code-reviewer` (new) | opus | One seat over the merged diff of a run. Carries pb's reserved angles: determinism and parity, the record spine, import boundaries, hot-path blocking. Read, Bash and the read-only gopls tools (callers and implementations; pb's reviewer had them before the cut). A dispatch outside a run is briefed with the PR body and the issue, ADR or plan it names. |
-| `review-seat` (new) | opus | One read-only seat of the `review` workflow: the intent seat, a finder or a checker, as the script's brief says. Read, Bash, Skill and the read-only gopls tools. |
+| `review-seat` (new) | opus; fable for the review workflow's intent and conformance seats | One read-only seat of the `review` workflow: the intent seat, a finder or a checker, as the script's brief says. Read, Bash, Skill and the read-only gopls tools. |
 | `determinism-auditor`, `parity-auditor`, `fork-indexer`, `fixture-capturer`, `infra-profiler` | opus | Unchanged. An agent without `ToolSearch` gets its granted `mcp__gopls__*` tools undeferred and callable (measured on `parity-auditor`), so the auditors need no new grant. |
 
 pb's other eleven agents are not carried (§6).
@@ -311,12 +311,18 @@ ultra` and the single seat on the same pull requests (kit #7).
 
 | Stage | Seats | Does |
 |---|---|---|
-| Intent | one `review-seat`, opus | The contract as numbered items from the PR body, the issues and ADRs it names, or the brief; a source's "verified" is a claim. Then whether that logic is sound for the domain, through the kit's skills. Then the diff size |
-| Find | `ceil(lines / 150)` kept within 2..6, opus | Six angles, merged when there are fewer finders: conformance both ways (each item to code, each changed path to an item), line by line and what was removed, callers through gopls and Go's pitfalls, the domain (pb's four reserved angles or the fork's Ext convention and landmines), tests by reading, quality |
-| Check | one per distinct `file:line`, up to `maxChecks` (40), opus (operator, 2026-10-23: a refutal drops the finding) | A seat that did not raise the candidate decides CONFIRMED, PLAUSIBLE or REFUTED by reading; refuted only when the code shows it |
+| Intent | one `review-seat`, fable | The contract as numbered items from the PR body, the issues and ADRs it names, or the brief; a source's "verified" is a claim. Then whether that logic is sound for the domain, through the kit's skills. Then the diff size |
+| Find | the conformance finder at fable, and `ceil(lines / 150)` more kept within 2..5 at opus | Conformance both ways (each item to code, each changed path to an item) is always its own seat. Five more angles, merged when there are fewer finders: line by line and what was removed, callers through gopls and Go's pitfalls, the domain (pb's four reserved angles or the fork's Ext convention and landmines), tests by reading, quality |
+| Check | one per changed file with candidates, eight candidates at most each, `maxChecks` (40) candidates in all, opus | A seat that raised none of them reads the file once and decides each candidate: CONFIRMED, PLAUSIBLE or REFUTED, refuted only when the code shows it. It marks a true duplicate; two defects on one line stay two |
+
+Fable runs where a wrong judgment misdirects everything after it (operator, 2026-10-23): the
+contract and its soundness, and the mapping of code to intent; working-here's rule allows a
+tier above opus by name for such a stage. The pattern angles and the checks run at opus; a
+checker at opus because a refutal drops the finding. `tiers` lowers any of them for one run.
 
 The return carries the contract, the findings that stand with their verdicts, the refuted,
-the unchecked, the coverage per angle and the seat count. Nothing is built, run or posted.
+the duplicates the checkers merged, the unchecked, the coverage per angle and the seat
+count. Nothing is built, run or posted.
 Its decisions are tested in `tests/test_review.py`; its token cost is unmeasured until the
 first live run.
 

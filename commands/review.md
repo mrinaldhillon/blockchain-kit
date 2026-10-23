@@ -41,8 +41,9 @@ nothing is edited, built, pushed or posted.
      no source stated one): a misread intent is the first thing to correct;
    - `findings`, most severe first, each with `file:line`, the contract item, the scenario
      and the verdict (`CONFIRMED` or `PLAUSIBLE`) with the reason that decided it;
-   - a count of `refuted` (the titles on request), every `unchecked` candidate, every
-     `coverage` entry with a `degraded` note, and `seats` (the cost of the run).
+   - a count of `refuted` and of `merged` duplicates (the titles on request), every
+     `unchecked` candidate, every `coverage` entry with a `degraded` note, and `seats` (the
+     cost of the run).
 
    Fix, defer to an issue, or accept each finding, and say which; that is the user's call or
    the session's under `blockchain-kit:working-here`. Nothing here replaces a gate.

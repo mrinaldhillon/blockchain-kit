@@ -35,10 +35,10 @@ read by the main loop and `make replay-parity` when owed.
 | `skills/using-blockchain-kit` | the routing table, given at session start |
 | `skills/` (bot) | `go`, `fork-lookup`, `fork-node-api`, `contract-abi`, `binance-streams`, `record-format`, `replay-parity`, `hot-path-determinism`, `environment-detection`, `research-surface`, `round-forensics` |
 | `skills/` (fork) | `fork-development`, `fork-ext-convention`, `fork-deploy`, `campaign`, `upstream-rebase` |
-| `agents/` | `golang-implementer`, `code-reviewer`, `review-seat`, `determinism-auditor`, `parity-auditor`, `fork-indexer`, `fixture-capturer`, `infra-profiler`. None runs above opus |
+| `agents/` | `golang-implementer`, `code-reviewer`, `review-seat`, `determinism-auditor`, `parity-auditor`, `fork-indexer`, `fixture-capturer`, `infra-profiler`. None runs above opus, except the review workflow's intent and conformance seats (fable, operator 2026-10-23) |
 | `workflows/implement.js` | `blockchain-kit:implement`: Lane → Integrate → Gate → Review → Fix → Re-gate. Its header is the contract of its `args` and its return |
 | `commands/implement.md` | `/blockchain-kit:implement`, the user's entry to the workflow |
-| `workflows/review.js` | `blockchain-kit:review`: Intent → Find → Check. The contract and its soundness first, then two to six finders by angle against it, then an independent checker per candidate; read-only. Its header is the contract of its `args` and its return |
+| `workflows/review.js` | `blockchain-kit:review`: Intent → Find → Check. The contract and its soundness first (fable), then a conformance finder (fable) and two to five more by angle (opus), then one checker per changed file with a verdict per candidate (opus); read-only. Its header is the contract of its `args` and its return |
 | `commands/review.md` | `/blockchain-kit:review [<pr#>\|<base>]`, the user's entry to the review workflow |
 | `commands/init.md` | `/blockchain-kit:init`, once per project; reports, changes nothing |
 | `output-styles/` | `distinguished-engineer`, forced for the plugin: the project sets no `outputStyle` |

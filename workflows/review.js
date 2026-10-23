@@ -4,9 +4,9 @@ export const meta = {
   whenToUse:
     'A pull request or branch in prediction-bot or bsc-geth reviewed against what it was written to do. Not for prose, and not for a diff an implement run already reviewed unless the user asks.',
   phases: [
-    { title: 'Intent', detail: 'one seat: the contract from the PR, issue, ADR, plan or brief; whether that logic is sound for the domain; the diff size', model: 'opus' },
-    { title: 'Find', detail: 'finders by angle against the contract, two to six by the size of the diff', model: 'opus' },
-    { title: 'Check', detail: 'one independent checker per candidate, by reading', model: 'opus' },
+    { title: 'Intent', detail: 'one seat: the contract from the PR, issue, ADR, plan or brief; whether that logic is sound for the domain; the diff size', model: 'fable' },
+    { title: 'Find', detail: 'the conformance finder at fable, and two to five more by angle at opus, by the size of the diff', model: 'opus' },
+    { title: 'Check', detail: 'one independent checker per changed file with candidates, a verdict for each, by reading', model: 'opus' },
   ],
 }
 
@@ -25,7 +25,8 @@ export const meta = {
 //     contract: '…',          // optional: the brief or contract text, when there is no PR
 //     project: '/abs/clone',  // filled with `module` by hooks/implement-args
 //     module: 'example.com/bot',
-//     tiers: { intent: 'opus', find: 'opus', check: 'opus' },  // nothing above opus
+//     tiers: { intent: 'fable', conformance: 'fable', find: 'opus', check: 'opus' },
+//                             // fable only for the first two; nothing above opus elsewhere
 //     maxChecks: 40,          // the most candidates checked; the rest come back unchecked
 //   }
 // Two modes, from `module`: the bot (the four reserved angles of prediction-bot) and the
@@ -33,10 +34,14 @@ export const meta = {
 // landmines). The review is of the session's own repository; fork work seen from a
 // prediction-bot session is reviewed from a session in the fork.
 //
-// Seats: one intent seat, then ceil(changed lines / 150) finders kept within 2..6, then
-// one checker per distinct candidate up to `maxChecks`. Nothing is edited, built or run;
-// the return is the contract as the intent seat read it, every candidate that survived
-// its check with the verdict that decided it, what was refuted and why, and the coverage.
+// Seats: one intent seat; the conformance finder plus ceil(changed lines / 150) more kept
+// within 2..5; one checker per changed file that has candidates, eight candidates at most
+// each, `maxChecks` candidates in all. Fable where most judgment is needed (operator,
+// 2026-10-23): the contract and its soundness, which everything after is measured
+// against, and the mapping of code to intent; opus for the pattern angles and the checks.
+// Nothing is edited, built or run; the return is the contract as the intent seat read it,
+// every candidate that survived its check with the verdict that decided it, what was
+// refuted, merged as a duplicate or left unchecked and why, and the coverage.
 
 const SEAT = 'blockchain-kit:review-seat'
 const UPSTREAM = 'github.com/ethereum/go-ethereum'
@@ -93,14 +98,25 @@ const CANDIDATES = {
   required: ['candidates', 'covered'],
 }
 
-const VERDICT = {
+const VERDICTS = {
   type: 'object',
   properties: {
-    verdict: { type: 'string', description: 'CONFIRMED | PLAUSIBLE | REFUTED' },
-    reason: { type: 'string', description: 'the line or lines that decided it, quoted with file:line' },
-    severity: { type: 'string', description: 'blocker | major | minor, as you would assign it' },
+    verdicts: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'the candidate, K<n>' },
+          verdict: { type: 'string', description: 'CONFIRMED | PLAUSIBLE | REFUTED' },
+          reason: { type: 'string', description: 'the line or lines that decided it, quoted with file:line' },
+          severity: { type: 'string', description: 'blocker | major | minor, as you would assign it' },
+          duplicateOf: { type: 'string', description: 'set only when this is the same defect as another candidate here: its id' },
+        },
+        required: ['id', 'verdict', 'reason'],
+      },
+    },
   },
-  required: ['verdict', 'reason'],
+  required: ['verdicts'],
 }
 
 const a = args || {}
@@ -112,8 +128,10 @@ const project = a.project ? String(a.project) : ''
 const projectModule = a.module ? String(a.module) : ''
 const fork = projectModule === UPSTREAM
 const mode = fork ? 'fork' : 'client'
-// Checkers at opus (operator, 2026-10-23): a refutal drops the finding, the costlier judgment.
-const TIERS = Object.assign({ intent: 'opus', find: 'opus', check: 'opus' }, a.tiers || {})
+// Operator, 2026-10-23: fable for the contract and for conformance, where a wrong judgment
+// misdirects everything after it; opus checkers, since a refutal drops the finding.
+const TIERS = Object.assign({ intent: 'fable', conformance: 'fable', find: 'opus', check: 'opus' }, a.tiers || {})
+const FABLE_STAGES = ['intent', 'conformance']
 const maxChecks = Number.isInteger(a.maxChecks) && a.maxChecks > 0 ? a.maxChecks : 40
 const forkIndex = project ? `${project.replace(/\/+$/, '')}/docs/fork/README.md` : 'docs/fork/README.md'
 
@@ -122,8 +140,10 @@ const refuse = (error, detail) => {
   return { error, ...(detail || {}) }
 }
 if (!base || !head) return refuse('base and head are required', { expected: '{base, head, pr?, contract?, project?, module?, tiers?, maxChecks?}' })
-const above = Object.entries(TIERS).filter(([, m]) => /fable|mythos|session/i.test(String(m)))
-if (above.length) return refuse('tier above opus', { tiers: Object.fromEntries(above), allowed: 'opus and lower, by name' })
+const above = Object.entries(TIERS).filter(
+  ([stage, m]) => /mythos|session/i.test(String(m)) || (/fable/i.test(String(m)) && !FABLE_STAGES.includes(stage)),
+)
+if (above.length) return refuse('tier above opus', { tiers: Object.fromEntries(above), allowed: 'fable for intent and conformance; opus and lower, by name, elsewhere' })
 if (!projectModule) log('no module given: whether this project is the bsc-geth fork is unchecked; the review uses the bot\'s angles')
 log(`${mode} · ${base}..${head}${pr ? ` · PR #${pr}` : ''}${contractText ? ' · brief given' : ''}`)
 
@@ -211,15 +231,17 @@ const ANGLES = {
     `a special case layered on shared code where the mechanism should have generalized (in the fork, a branch in an ` +
     `upstream path instead of an \`Ext\` hook); and a rule of a governing \`CLAUDE.md\`, quoted, that a line breaks.`,
 }
+// The conformance finder is its own seat at every size, at its own tier; the other five
+// angles share the opus finders, merged when there are fewer than five.
 const GROUPS = {
-  2: [['conformance', 'lines', 'tracer'], ['domain', 'tests', 'quality']],
-  3: [['conformance', 'lines'], ['tracer', 'domain'], ['tests', 'quality']],
-  4: [['conformance'], ['lines', 'tracer'], ['domain'], ['tests', 'quality']],
-  5: [['conformance'], ['lines'], ['tracer'], ['domain'], ['tests', 'quality']],
-  6: [['conformance'], ['lines'], ['tracer'], ['domain'], ['tests'], ['quality']],
+  2: [['lines', 'tracer'], ['domain', 'tests', 'quality']],
+  3: [['lines', 'tracer'], ['domain'], ['tests', 'quality']],
+  4: [['lines'], ['tracer'], ['domain'], ['tests', 'quality']],
+  5: [['lines'], ['tracer'], ['domain'], ['tests'], ['quality']],
 }
-const budget = Math.min(6, Math.max(2, Math.ceil(lines / 150)))
-const groups = GROUPS[budget]
+const budget = Math.min(5, Math.max(2, Math.ceil(lines / 150)))
+const groups = [['conformance'], ...GROUPS[budget]]
+const tierOf = (group) => (group.includes('conformance') ? TIERS.conformance : TIERS.find)
 // The skills every finder and checker loads: `go` and, in the fork, the Ext convention,
 // whatever the intent seat named, then the ones it named for the touched surfaces.
 const skills = [
@@ -239,7 +261,7 @@ const sanityBlock = (intent.sanity || []).length
   : ''
 
 phase('Find')
-log(`${budget} finder(s): ${groups.map((g) => g.join('+')).join(' · ')}`)
+log(`${groups.length} finder(s): ${groups.map((g) => `${g.join('+')}@${tierOf(g)}`).join(' · ')}`)
 const found = await parallel(
   groups.map((group) => () => {
     seats.find += 1
@@ -256,7 +278,7 @@ const found = await parallel(
         `nameable scenario: a checker verifies each one independently, and a finder that drops a half-believed ` +
         `candidate is the commonest cause of a miss. Two angles flagging one line for different reasons are two ` +
         `candidates. Return covered: every changed path with what you checked on it.`,
-      { label: `find:${group.join('+')}`, phase: 'Find', agentType: SEAT, model: TIERS.find, effort: 'high', schema: CANDIDATES },
+      { label: `find:${group.join('+')}`, phase: 'Find', agentType: SEAT, model: tierOf(group), effort: 'high', schema: CANDIDATES },
     )
   }),
 )
@@ -266,45 +288,62 @@ const coverage = groups.map((group, i) =>
     : { angles: group, covered: '', degraded: 'the finder returned nothing: these angles were not covered' },
 )
 
-// Candidates: the sanity findings, then the finders', one per file and line.
+// Candidates: the sanity findings, then the finders'. None is merged here: two candidates
+// on one line may be two defects, and only a reader can tell; the checker marks duplicates.
 const pool = []
-const seen = new Map()
-const add = (c, angle) => {
-  if (!c || !c.title) return
-  const key = c.file && Number.isFinite(Number(c.line)) ? `${c.file}:${Number(c.line)}` : ''
-  if (key && seen.has(key)) {
-    const kept = seen.get(key)
-    if (!kept.angles.includes(angle)) kept.angles.push(angle)
-    kept.also.push(c.title)
-    return
-  }
-  const entry = { ...c, angles: [angle], also: [] }
-  if (key) seen.set(key, entry)
-  pool.push(entry)
-}
-for (const s of intent.sanity || []) add(s, 'intent')
-found.forEach((f, i) => (f && Array.isArray(f.candidates) ? f.candidates : []).forEach((c) => add(c, groups[i].join('+'))))
+for (const s of intent.sanity || []) if (s && s.title) pool.push({ ...s, angle: 'intent' })
+found.forEach((f, i) =>
+  (f && Array.isArray(f.candidates) ? f.candidates : []).forEach((c) => {
+    if (c && c.title) pool.push({ ...c, angle: groups[i].join('+') })
+  }),
+)
 pool.sort((x, y) => (SEVERITY[x.severity] ?? 3) - (SEVERITY[y.severity] ?? 3))
+pool.forEach((c, i) => (c.id = `K${i + 1}`))
 const toCheck = pool.slice(0, maxChecks)
-const unchecked = pool.slice(maxChecks)
+const unchecked = pool.slice(maxChecks).map((c) => ({ ...c, reason: 'over maxChecks' }))
 log(`${pool.length} candidate(s)${unchecked.length ? `, ${unchecked.length} over maxChecks left unchecked` : ''}`)
 
-// Check. A seat that did not raise the candidate decides it, by reading.
+// Check. One seat per changed file reads it once and decides each candidate in it; it
+// raised none of them. A file with more than eight is split; the contract's own go together.
+const PER_CHECKER = 8
+const byFile = new Map()
+for (const c of toCheck) {
+  const key = c.file || ''
+  if (!byFile.has(key)) byFile.set(key, [])
+  byFile.get(key).push(c)
+}
+const batches = []
+for (const [file, list] of byFile) {
+  list.sort((x, y) => (Number(x.line) || 0) - (Number(y.line) || 0))
+  const parts = Math.ceil(list.length / PER_CHECKER)
+  for (let k = 0; k < parts; k++) {
+    batches.push({
+      file,
+      list: list.slice(k * PER_CHECKER, (k + 1) * PER_CHECKER),
+      label: `check:${file || 'contract'}${parts > 1 ? `#${k + 1}` : ''}`,
+    })
+  }
+}
 phase('Check')
 const itemText = (id) => {
   const hit = contract.find((c) => c.id === id)
   return hit ? `${hit.id}. ${hit.behaviour}` : 'none'
 }
-const verdicts = await parallel(
-  toCheck.map((c, i) => () => {
+const describe = (c) =>
+  `${c.id}. ${c.title}\n  Where: ${c.file ? `${c.file}:${c.line ?? '?'}` : '(the contract, no line)'} · angle: ${c.angle}\n` +
+  `  Contract item: ${itemText(c.item)}\n  Why: ${c.why}\n  Scenario: ${c.scenario}`
+const answers = await parallel(
+  batches.map((b) => () => {
     seats.check += 1
     return agent(
       `You are a checker in a review of ${range} (${modeLine}). By reading only. ${loadLine}\n\n` +
-        `A finder raised this candidate. Decide whether it is real at ${head}.\n` +
-        `Title: ${c.title}\nWhere: ${c.file ? `${c.file}:${c.line ?? '?'}` : '(the contract, no line)'}\n` +
-        `Angle: ${c.angles.join(', ')}\nContract item: ${itemText(c.item)}\nWhy: ${c.why}\nScenario: ${c.scenario}\n` +
-        (c.also.length ? `Also raised at that line: ${c.also.join('; ')}\n` : '') +
-        `\nCatch every real defect: a missed one ships. Return exactly one verdict:\n` +
+        (b.file
+          ? `Finders raised these candidates in ${b.file}. Read the file at ${head} whole once, and what it calls or is ` +
+            `called by as each candidate needs, then decide each one on its own.\n\n`
+          : `The intent seat raised these about the contract's logic itself. Read what each needs, then decide each ` +
+            `one on its own.\n\n`) +
+        `${b.list.map(describe).join('\n\n')}\n\n` +
+        `You raised none of these. Catch every real defect: a missed one ships. One verdict per id:\n` +
         `- CONFIRMED: you can name the inputs or state that trigger it and the wrong result. Quote the line.\n` +
         `- PLAUSIBLE: the mechanism is real and the trigger depends on timing, configuration or environment that is ` +
         `realistic here (an interleaving, a restart, a cold cache, an error path, a reachable nil, a boundary the code ` +
@@ -313,37 +352,61 @@ const verdicts = await parallel(
         `it impossible (show it); this diff already handles it (cite the guard); the diff neither moved nor ` +
         `re-exposed it; or it has no observable effect. A quality candidate is refuted when the cited helper or state ` +
         `does not exist or does not do what the diff re-does.\n` +
-        `Give the reason with file:line, and the severity you would assign.`,
-      { label: `check:${i + 1}`, phase: 'Check', agentType: SEAT, model: TIERS.check, effort: 'high', schema: VERDICT },
+        `Two candidates that are the same defect (one mechanism, one trigger): decide the clearer one, and give the ` +
+        `other its id in duplicateOf. Two defects on one line are two verdicts. Give each reason with file:line, and ` +
+        `the severity you would assign.`,
+      { label: b.label, phase: 'Check', agentType: SEAT, model: TIERS.check, effort: 'high', schema: VERDICTS },
     )
   }),
 )
 
+const verdictOf = new Map()
+batches.forEach((b, i) => {
+  const ids = new Set(b.list.map((c) => c.id))
+  const got = answers[i] && Array.isArray(answers[i].verdicts) ? answers[i].verdicts : []
+  for (const v of got) if (v && ids.has(String(v.id))) verdictOf.set(String(v.id), v)
+})
+const byId = new Map(toCheck.map((c) => [c.id, c]))
 const findings = []
 const refuted = []
-toCheck.forEach((c, i) => {
-  const v = verdicts[i]
-  const verdict = v && typeof v.verdict === 'string' ? v.verdict.toUpperCase() : ''
+const merged = []
+const kept = new Map()
+for (const c of toCheck) {
+  const v = verdictOf.get(c.id)
+  const word = v && typeof v.verdict === 'string' ? v.verdict.toUpperCase() : ''
+  const into = v && v.duplicateOf ? String(v.duplicateOf) : ''
+  if (into && into !== c.id && byId.has(into) && verdictOf.has(into) && (byId.get(into).file || '') === (c.file || '')) {
+    merged.push({ id: c.id, title: c.title, into, angle: c.angle })
+    continue
+  }
   const out = {
+    id: c.id,
     title: c.title,
     file: c.file || '',
     line: c.line ?? null,
     severity: v && v.severity in SEVERITY ? v.severity : c.severity,
     item: c.item || 'none',
-    angles: c.angles,
+    angles: [c.angle],
     why: c.why,
     scenario: c.scenario,
-    verdict: verdict || 'UNCHECKED',
-    reason: v ? v.reason : 'the checker returned nothing',
+    verdict: word || 'UNCHECKED',
+    reason: v ? v.reason : 'the checker returned no verdict for it',
   }
-  if (verdict === 'REFUTED') refuted.push(out)
-  else if (verdict === 'CONFIRMED' || verdict === 'PLAUSIBLE') findings.push(out)
-  else unchecked.push({ ...c, reason: out.reason })
-})
+  if (word === 'REFUTED') refuted.push(out)
+  else if (word === 'CONFIRMED' || word === 'PLAUSIBLE') {
+    findings.push(out)
+    kept.set(c.id, out)
+  } else unchecked.push({ ...c, reason: out.reason })
+}
+// A duplicate's angle joins the finding it was merged into, when that one stands.
+for (const m of merged) {
+  const target = kept.get(m.into)
+  if (target && !target.angles.includes(m.angle)) target.angles.push(m.angle)
+}
 const rank = (f) => (SEVERITY[f.severity] ?? 3) * 2 + (f.verdict === 'CONFIRMED' ? 0 : 1)
 findings.sort((x, y) => rank(x) - rank(y))
 findings.forEach((f, i) => (f.n = i + 1))
-log(`${findings.length} finding(s) stand · ${refuted.length} refuted · ${unchecked.length} unchecked · seats ${seats.intent}+${seats.find}+${seats.check}`)
+log(`${findings.length} finding(s) stand · ${refuted.length} refuted · ${merged.length} merged · ${unchecked.length} unchecked · seats ${seats.intent}+${seats.find}+${seats.check}`)
 
 return {
   mode,
@@ -353,6 +416,7 @@ return {
   contract: { sources: intent.sources || [], items: contract, derived: Boolean(intent.derived) },
   findings,
   refuted,
+  merged,
   unchecked,
   coverage,
   size: { files: intent.files, lines },
