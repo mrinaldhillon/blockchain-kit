@@ -28,11 +28,15 @@ export const meta = {
 //     tiers: { intent: 'fable', conformance: 'fable', find: 'opus', check: 'opus' },
 //                             // fable only for the first two; nothing above opus elsewhere
 //     maxChecks: 40,          // the most candidates checked; the rest come back unchecked
+//     proceed: true,          // go past the pause after Intent (below); resume the paused run
 //   }
 // Two modes, from `module`: the bot (the four reserved angles of prediction-bot) and the
 // fork (`module` is github.com/ethereum/go-ethereum: the Ext convention and the rebase
 // landmines). The review is of the session's own repository; fork work seen from a
 // prediction-bot session is reviewed from a session in the fork.
+//
+// The run pauses after Intent when the contract is in doubt (no source stated it, or a
+// blocker in its logic) and returns it for the user; `proceed: true` goes on.
 //
 // Seats: one intent seat; the conformance finder plus ceil(changed lines / 150) more kept
 // within 2..5; one checker per changed file that has candidates, eight candidates at most
@@ -133,13 +137,14 @@ const mode = fork ? 'fork' : 'client'
 const TIERS = Object.assign({ intent: 'fable', conformance: 'fable', find: 'opus', check: 'opus' }, a.tiers || {})
 const FABLE_STAGES = ['intent', 'conformance']
 const maxChecks = Number.isInteger(a.maxChecks) && a.maxChecks > 0 ? a.maxChecks : 40
+const proceed = a.proceed === true
 const forkIndex = project ? `${project.replace(/\/+$/, '')}/docs/fork/README.md` : 'docs/fork/README.md'
 
 const refuse = (error, detail) => {
   log(`refused: ${error}`)
   return { error, ...(detail || {}) }
 }
-if (!base || !head) return refuse('base and head are required', { expected: '{base, head, pr?, contract?, project?, module?, tiers?, maxChecks?}' })
+if (!base || !head) return refuse('base and head are required', { expected: '{base, head, pr?, contract?, project?, module?, tiers?, maxChecks?, proceed?}' })
 const above = Object.entries(TIERS).filter(
   ([stage, m]) => /mythos|session/i.test(String(m)) || (/fable/i.test(String(m)) && !FABLE_STAGES.includes(stage)),
 )
@@ -186,6 +191,34 @@ if (!intent || !Array.isArray(intent.contract)) return { error: 'the intent seat
 const contract = intent.contract.filter((c) => c && c.id && c.behaviour)
 const lines = Number(intent.lines) || 0
 log(`contract: ${contract.length} item(s)${intent.derived ? ', derived from the diff' : ''} · ${(intent.sanity || []).length} sanity finding(s) · ${intent.files} file(s), ${lines} line(s)`)
+
+// The pause (operator, 2026-10-23): every later seat is measured against this contract, so
+// when it is in doubt the run stops here and the user decides before the finders spend.
+// In doubt: no source stated it, or the intent seat judged its logic broken (a blocker).
+// `proceed: true` goes on; resumed from this run, the intent seat is not paid for twice.
+const doubts = [
+  ...(intent.derived || contract.length === 0 ? ['no source stated the contract: it was worked out from the diff'] : []),
+  ...(intent.sanity || []).filter((x) => x && x.severity === 'blocker').map((x) => `the logic itself: ${x.title}`),
+]
+if (doubts.length && !proceed) {
+  log(`paused after Intent: ${doubts.join('; ')}`)
+  return {
+    paused: true,
+    why: doubts,
+    mode,
+    base,
+    head,
+    pr: pr || null,
+    contract: { sources: intent.sources || [], items: contract, derived: Boolean(intent.derived) },
+    sanity: intent.sanity || [],
+    size: { files: intent.files, lines },
+    seats,
+    next:
+      'Show the user the contract, why the run paused and the sanity findings (unchecked). To go on: the same ' +
+      'args plus proceed: true, resumed from this run. To correct the contract: the same args with contract set ' +
+      'to the corrected text.',
+  }
+}
 
 // Find. The angles, by mode; fewer finders than angles merges them.
 const ANGLES = {

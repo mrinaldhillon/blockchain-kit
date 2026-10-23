@@ -36,7 +36,15 @@ nothing is edited, built, pushed or posted.
    kit's `implement-args` hook fills both when they are left out, and `module` picks the
    angles (the bot's four reserved angles, or the fork's Ext convention and landmines). The
    run is in the background: do not poll it.
-5. **When it returns**, show the user, in this order:
+5. **If it returns `paused`**, the contract is in doubt (`why`: no source stated it, or the
+   intent seat found a blocker in its logic) and no finder has run. Show the user the
+   contract, `why` and the `sanity` findings (unchecked), and ask which way:
+   - go on: launch again with the same `args` plus `proceed: true`, and `resumeFromRunId` set
+     to the paused run's id, so the intent seat comes from cache;
+   - correct it: launch again with `contract` set to the corrected text (the intent seat
+     reads it as the brief and judges it again);
+   - stop.
+6. **When it returns findings**, show the user, in this order:
    - the contract as the intent seat read it (`contract.items`, and `contract.derived` when
      no source stated one): a misread intent is the first thing to correct;
    - `findings`, most severe first, each with `file:line`, the contract item, the scenario

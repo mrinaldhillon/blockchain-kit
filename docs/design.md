@@ -315,6 +315,11 @@ ultra` and the single seat on the same pull requests (kit #7).
 | Find | the conformance finder at fable, and `ceil(lines / 150)` more kept within 2..5 at opus | Conformance both ways (each item to code, each changed path to an item) is always its own seat. Five more angles, merged when there are fewer finders: line by line and what was removed, callers through gopls and Go's pitfalls, the domain (pb's four reserved angles or the fork's Ext convention and landmines), tests by reading, quality |
 | Check | one per changed file with candidates, eight candidates at most each, `maxChecks` (40) candidates in all, opus | A seat that raised none of them reads the file once and decides each candidate: CONFIRMED, PLAUSIBLE or REFUTED, refuted only when the code shows it. It marks a true duplicate; two defects on one line stay two |
 
+The run pauses after Intent when the contract is in doubt: no source stated it, or the
+intent seat found a blocker in its logic (operator, 2026-10-23). It returns the contract and
+why, and no finder has spent anything; the user goes on (`proceed: true`, resumed from the
+paused run so the intent seat comes from cache) or corrects the contract and runs again.
+
 Fable runs where a wrong judgment misdirects everything after it (operator, 2026-10-23): the
 contract and its soundness, and the mapping of code to intent; working-here's rule allows a
 tier above opus by name for such a stage. The pattern angles and the checks run at opus; a
