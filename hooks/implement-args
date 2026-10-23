@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""PreToolUse (Workflow): tell the implement workflow what the project is.
+"""PreToolUse (Workflow): tell the implement and review workflows what the project is.
 
-workflows/implement.js cannot read the filesystem. It chooses its mode (the bot, the
-bsc-geth fork in place, a fork checkout from the bot) from `args.project` and `args.module`,
-which only a caller supplies; without `module` it runs the bot's shape, whose lane gates
-build the whole module, in whatever tree it is in. This hook reads both from the disk, so
-the mode follows the tree whatever the caller passed or forgot.
+workflows/implement.js and workflows/review.js cannot read the filesystem. They choose
+their mode (the bot, the bsc-geth fork in place, a fork checkout from the bot) from
+`args.project` and `args.module`, which only a caller supplies; without `module` they run
+the bot's shape: implement's lane gates build the whole module, in whatever tree it is in,
+and review briefs the bot's angles. This hook reads both from the disk, so the mode follows
+the tree whatever the caller passed or forgot.
 
-It acts on a call whose `tool_input.name` is `blockchain-kit:implement` or `implement`.
-Every other Workflow call, a script or a scriptPath included, passes untouched.
+It acts on a call whose `tool_input.name` is `blockchain-kit:implement`, `implement`,
+`blockchain-kit:review` or `review`. Every other Workflow call, a script or a scriptPath
+included, passes untouched.
 
   project  CLAUDE_PROJECT_DIR, else the git top level (the nearest directory holding
            .git) at or above the payload `cwd`; realpath'd.
@@ -45,7 +47,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
 NAME = "implement-args"
-WORKFLOWS = frozenset({"blockchain-kit:implement", "implement"})
+WORKFLOWS = frozenset({"blockchain-kit:implement", "implement", "blockchain-kit:review", "review"})
 REASON = ("This project is the bsc-geth fork and the implement workflow could not be told so: without `module` "
           "it would brief bot-shaped lanes, whole-module gates included, in the fork's tree. Pass `project` "
           "and `module` (github.com/ethereum/go-ethereum) in args yourself.")

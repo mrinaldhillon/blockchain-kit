@@ -35,9 +35,11 @@ read by the main loop and `make replay-parity` when owed.
 | `skills/using-blockchain-kit` | the routing table, given at session start |
 | `skills/` (bot) | `go`, `fork-lookup`, `fork-node-api`, `contract-abi`, `binance-streams`, `record-format`, `replay-parity`, `hot-path-determinism`, `environment-detection`, `research-surface`, `round-forensics` |
 | `skills/` (fork) | `fork-development`, `fork-ext-convention`, `fork-deploy`, `campaign`, `upstream-rebase` |
-| `agents/` | `golang-implementer`, `code-reviewer`, `determinism-auditor`, `parity-auditor`, `fork-indexer`, `fixture-capturer`, `infra-profiler`. None runs above opus |
+| `agents/` | `golang-implementer`, `code-reviewer`, `review-seat`, `determinism-auditor`, `parity-auditor`, `fork-indexer`, `fixture-capturer`, `infra-profiler`. None runs above opus |
 | `workflows/implement.js` | `blockchain-kit:implement`: Lane → Integrate → Gate → Review → Fix → Re-gate. Its header is the contract of its `args` and its return |
 | `commands/implement.md` | `/blockchain-kit:implement`, the user's entry to the workflow |
+| `workflows/review.js` | `blockchain-kit:review`: Intent → Find → Check. The contract and its soundness first, then two to six finders by angle against it, then an independent checker per candidate; read-only. Its header is the contract of its `args` and its return |
+| `commands/review.md` | `/blockchain-kit:review [<pr#>\|<base>]`, the user's entry to the review workflow |
 | `commands/init.md` | `/blockchain-kit:init`, once per project; reports, changes nothing |
 | `output-styles/` | `distinguished-engineer`, forced for the plugin: the project sets no `outputStyle` |
 | `bin/bsc-fork` | `pin`, `show`, `search`, `list`, `check`, `path` |
@@ -50,14 +52,14 @@ read by the main loop and `make replay-parity` when owed.
 | `hooks/guard-prod-run` | on the production host, denies a bare `replay`, `bot` or collector run that bypasses `scripts/replay-run.sh`, and, in the fork tree, heavy work (`make test\|lint\|geth-prod`, `go test ./...`, `golangci-lint`, `ci.go test\|lint`) not wrapped by `build/unit_run.py`, `systemd-run` or `verifyconstrained`; fails closed |
 | `hooks/land-shape` | runs a `dev-setup/ci/land` call in the foreground at a 30-minute timeout, with no `timeout` wrapper; fails open |
 | `hooks/workflow-tiers` | refuses a workflow script written in the session whose `agent()` calls leave `model` unset, so no stage inherits the session's tier by omission; fails open |
-| `hooks/implement-args` | fills `project` and `module` into an implement run's args from the tree, so the workflow picks its mode (the bot, the fork in place, a fork checkout) whatever the caller passed |
+| `hooks/implement-args` | fills `project` and `module` into an implement or review run's args from the tree, so the workflow picks its mode (the bot, the fork in place, a fork checkout) whatever the caller passed |
 | `hooks/worktree-create` | makes every harness worktree (a workflow lane, `claude -w`, EnterWorktree) beside the clone at `<parent>/.<clone>.worktrees/<name>`, never inside it, on `worktree-<name>` from the session's HEAD; refuses a parent inside a repository or a target that exists |
 | `hooks/worktree-remove` | removes a worktree the kit made when the harness retires it, uncommitted work refused and kept, then deletes its branch when merged |
 | `hooks/gofmt-on-edit` | formats a Go file Claude writes, in the project, a worktree of it, or the fork checkout |
 | `lib/` | `forkpin.py` (the pin, the module cache, the checkout, `go.work`, the index), `bkhost.py` (the production-host test), `blockchain-kit-homes.sh` (the config home) |
 | `share/mcp-gopls.json` | the `gopls` entry for a repo's `.mcp.json` |
 | `share/cloud-setup-bsc-geth.sh` | the setup script of the `bsc-geth` cloud environment at claude.ai/code, versioned; §Cloud sessions |
-| `tests/run` | the hermetic suite: `bin/`, `lib/`, the hooks, and the workflow script against scripted agents |
+| `tests/run` | the hermetic suite: `bin/`, `lib/`, the hooks, and the workflow scripts against scripted agents |
 | `.claude-plugin/` | plugin and single-plugin marketplace manifests. No `version`: the commit SHA is the version |
 
 ## Skill modes
