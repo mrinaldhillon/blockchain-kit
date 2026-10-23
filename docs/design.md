@@ -313,7 +313,7 @@ ultra` and the single seat on the same pull requests (kit #7).
 |---|---|---|
 | Intent | one `review-seat`, opus | The contract as numbered items from the PR body, the issues and ADRs it names, or the brief; a source's "verified" is a claim. Then whether that logic is sound for the domain, through the kit's skills. Then the diff size |
 | Find | `ceil(lines / 150)` kept within 2..6, opus | Six angles, merged when there are fewer finders: conformance both ways (each item to code, each changed path to an item), line by line and what was removed, callers through gopls and Go's pitfalls, the domain (pb's four reserved angles or the fork's Ext convention and landmines), tests by reading, quality |
-| Check | one per distinct `file:line`, up to `maxChecks` (40), sonnet | A seat that did not raise the candidate decides CONFIRMED, PLAUSIBLE or REFUTED by reading; refuted only when the code shows it |
+| Check | one per distinct `file:line`, up to `maxChecks` (40), opus (operator, 2026-10-23: a refutal drops the finding) | A seat that did not raise the candidate decides CONFIRMED, PLAUSIBLE or REFUTED by reading; refuted only when the code shows it |
 
 The return carries the contract, the findings that stand with their verdicts, the refuted,
 the unchecked, the coverage per angle and the seat count. Nothing is built, run or posted.

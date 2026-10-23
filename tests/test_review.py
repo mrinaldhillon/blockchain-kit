@@ -104,10 +104,10 @@ class Review(unittest.TestCase):
         ran = self.run_script(args(), given)
         self.assertEqual({c["agentType"] for c in ran["calls"]}, {SEAT})
         self.assertEqual([(c["label"], c["model"]) for c in ran["calls"]],
-                         [("intent", "opus"), (TWO[0], "opus"), (TWO[1], "opus"), ("check:1", "sonnet")])
+                         [("intent", "opus"), (TWO[0], "opus"), (TWO[1], "opus"), ("check:1", "opus")])
         self.assertEqual(ran["phases"], ["Intent", "Find", "Check"])
-        tiered = self.run_script(args(tiers={"check": "opus"}), given)
-        self.assertEqual(tiered["calls"][-1]["model"], "opus")
+        tiered = self.run_script(args(tiers={"check": "sonnet"}), given)
+        self.assertEqual(tiered["calls"][-1]["model"], "sonnet")
 
     def test_the_intent_seat_reads_the_sources_before_the_code(self):
         ran = self.run_script(args(), {"intent": None})

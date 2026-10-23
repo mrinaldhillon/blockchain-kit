@@ -6,7 +6,7 @@ export const meta = {
   phases: [
     { title: 'Intent', detail: 'one seat: the contract from the PR, issue, ADR, plan or brief; whether that logic is sound for the domain; the diff size', model: 'opus' },
     { title: 'Find', detail: 'finders by angle against the contract, two to six by the size of the diff', model: 'opus' },
-    { title: 'Check', detail: 'one independent checker per candidate, by reading', model: 'sonnet' },
+    { title: 'Check', detail: 'one independent checker per candidate, by reading', model: 'opus' },
   ],
 }
 
@@ -25,7 +25,7 @@ export const meta = {
 //     contract: '…',          // optional: the brief or contract text, when there is no PR
 //     project: '/abs/clone',  // filled with `module` by hooks/implement-args
 //     module: 'example.com/bot',
-//     tiers: { intent: 'opus', find: 'opus', check: 'sonnet' },  // nothing above opus
+//     tiers: { intent: 'opus', find: 'opus', check: 'opus' },  // nothing above opus
 //     maxChecks: 40,          // the most candidates checked; the rest come back unchecked
 //   }
 // Two modes, from `module`: the bot (the four reserved angles of prediction-bot) and the
@@ -112,7 +112,8 @@ const project = a.project ? String(a.project) : ''
 const projectModule = a.module ? String(a.module) : ''
 const fork = projectModule === UPSTREAM
 const mode = fork ? 'fork' : 'client'
-const TIERS = Object.assign({ intent: 'opus', find: 'opus', check: 'sonnet' }, a.tiers || {})
+// Checkers at opus (operator, 2026-10-23): a refutal drops the finding, the costlier judgment.
+const TIERS = Object.assign({ intent: 'opus', find: 'opus', check: 'opus' }, a.tiers || {})
 const maxChecks = Number.isInteger(a.maxChecks) && a.maxChecks > 0 ? a.maxChecks : 40
 const forkIndex = project ? `${project.replace(/\/+$/, '')}/docs/fork/README.md` : 'docs/fork/README.md'
 
