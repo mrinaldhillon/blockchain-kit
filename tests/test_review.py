@@ -124,7 +124,7 @@ class Review(unittest.TestCase):
         prompt = self.prompt(self.run_script(args(), given), TWO[0])
         self.assertIn("C1. a gap fails loud", prompt)
         self.assertIn("do not raise them again:\n- no reorg handling", prompt)
-        self.assertIn("blockchain-kit:record-format", prompt)
+        self.assertIn("before judging: blockchain-kit:go, blockchain-kit:record-format.", prompt)
         self.assertNotIn("a hypothesis, not a spec", prompt)
         derived = self.prompt(self.run_script(args(), {"intent": intent(derived=True)}), TWO[0])
         self.assertIn("a hypothesis, not a spec", derived)
@@ -137,6 +137,7 @@ class Review(unittest.TestCase):
         fork = self.prompt(self.run_script(args(module="github.com/ethereum/go-ethereum", project="/srv/bsc-geth/"),
                                            {"intent": intent()}), TWO[1])
         self.assertIn("The Ext convention", fork)
+        self.assertIn("blockchain-kit:go, blockchain-kit:fork-ext-convention, blockchain-kit:record-format.", fork)
         self.assertIn("/srv/bsc-geth/docs/fork/README.md", fork)
         self.assertNotIn("rule 47", fork)
         self.assertNotIn("discipline.md", fork)
@@ -168,6 +169,7 @@ class Review(unittest.TestCase):
         ran = self.run_script(args(), given)
         self.assertEqual([lbl for lbl in self.labels(ran) if lbl.startswith("check")], ["check:1", "check:2"])
         self.assertIn("Also raised at that line: needless copy", self.prompt(ran, "check:1"))
+        self.assertIn("before judging: blockchain-kit:go, blockchain-kit:record-format.", self.prompt(ran, "check:1"))
         self.assertEqual(ran["result"]["findings"][0]["angles"], ["conformance+lines+tracer", "domain+tests+quality"])
 
     def test_checks_stop_at_max_checks(self):

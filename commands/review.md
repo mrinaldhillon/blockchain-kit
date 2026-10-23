@@ -14,8 +14,9 @@ nothing is edited, built, pushed or posted.
 
 1. **The range**, one Bash call each; stop and say which failed:
    - **A PR number:** `gh pr view <n> --json headRefOid,baseRefName,state`. `head` is
-     `headRefOid`; `base` is `git merge-base origin/<baseRefName> <headRefOid>` (run
-     `git fetch origin` first when either is missing). A merged PR works the same way.
+     `headRefOid`. When `git cat-file -e <head>^{commit}` fails (a merged PR's branch is
+     gone, and `git fetch origin` does not fetch pull refs), `git fetch origin pull/<n>/head`.
+     `base` is `git merge-base origin/<baseRefName> <head>`. A merged PR works the same way.
    - **A base ref:** `head` is `git rev-parse HEAD`; `base` is `git merge-base <ref> HEAD`.
    - **Nothing:** `head` is `git rev-parse HEAD`; `base` is `git merge-base origin/main HEAD`
      in prediction-bot, `git merge-base origin/mrinal/dev HEAD` in bsc-geth. An empty range

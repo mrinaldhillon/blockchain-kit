@@ -219,7 +219,16 @@ const GROUPS = {
 }
 const budget = Math.min(6, Math.max(2, Math.ceil(lines / 150)))
 const groups = GROUPS[budget]
-const skills = [...new Set((intent.skills || []).map((s) => String(s)).filter(Boolean))]
+// The skills every finder and checker loads: `go` and, in the fork, the Ext convention,
+// whatever the intent seat named, then the ones it named for the touched surfaces.
+const skills = [
+  ...new Set([
+    'blockchain-kit:go',
+    ...(fork ? ['blockchain-kit:fork-ext-convention'] : []),
+    ...(intent.skills || []).map((s) => String(s)).filter(Boolean),
+  ]),
+]
+const loadLine = `Load with the Skill tool before judging: ${skills.join(', ')}.`
 const contractBlock = contract.length
   ? contract.map((c) => `${c.id}. ${c.behaviour}`).join('\n')
   : '(no items: the intent seat found nothing the change was written to do)'
@@ -239,7 +248,7 @@ const found = await parallel(
         `The contract this change was written against` +
         (intent.derived ? ' (worked out from the diff, since no source stated one: a hypothesis, not a spec)' : '') +
         `:\n${contractBlock}${sanityBlock}\n\n` +
-        (skills.length ? `Load with the Skill tool before judging: ${skills.join(', ')}.\n\n` : '') +
+        `${loadLine}\n\n` +
         `Your angle${group.length > 1 ? 's' : ''}:\n\n${group.map((k) => ANGLES[k]).join('\n\n')}\n\n` +
         `Surface up to 8 candidates per angle, each with file, the line at ${head}, title, the contract item it ` +
         `concerns (C<n>, or none), severity as you see it, why, and scenario. Pass through every candidate with a ` +
@@ -289,7 +298,7 @@ const verdicts = await parallel(
   toCheck.map((c, i) => () => {
     seats.check += 1
     return agent(
-      `You are a checker in a review of ${range} (${modeLine}). By reading only.\n\n` +
+      `You are a checker in a review of ${range} (${modeLine}). By reading only. ${loadLine}\n\n` +
         `A finder raised this candidate. Decide whether it is real at ${head}.\n` +
         `Title: ${c.title}\nWhere: ${c.file ? `${c.file}:${c.line ?? '?'}` : '(the contract, no line)'}\n` +
         `Angle: ${c.angles.join(', ')}\nContract item: ${itemText(c.item)}\nWhy: ${c.why}\nScenario: ${c.scenario}\n` +
