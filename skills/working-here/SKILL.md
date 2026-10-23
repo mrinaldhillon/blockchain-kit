@@ -25,9 +25,15 @@ anything here.
    cost) is filed in `mrinaldhillon/blockchain-kit`, never in the repository you are in
    (operator, 2026-10-14).
 3. **Cut units.** A unit is `{id, brief, packages, skills?}`:
-   - The brief is a contract: the files, the interfaces with exact signatures, the test cases
-     with their assertions, the invariants, and what is out of scope. Bodies are the
-     implementer's. A brief the implementer would have to guess from is not ready.
+   - The brief is a contract: the files, the interfaces with exact signatures, the invariants
+     each test protects, and what is out of scope. Bodies are the implementer's. A brief the
+     implementer would have to guess from is not ready.
+   - Every brief, in either repository, carries this line verbatim (pb `docs/discipline.md`
+     rule 47, operator ruling 2026-10-19): "Tests: for each test, name the invariant, frozen
+     value, malformed-input class or real-data golden it protects, and use one table-driven
+     test per shape; write no test per brief row, counter or struct field, no argument-parsing
+     or label-format test, and no milestone-named file; delete the tests your change makes
+     dead."
    - Units are independent: no two share a Go package, and none needs another's result. Work
      that is coupled is one unit.
    - Name the kit skills a unit needs. A subagent gets none by description.
