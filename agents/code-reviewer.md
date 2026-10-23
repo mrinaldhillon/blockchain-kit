@@ -49,6 +49,12 @@ scenario.
   it.
 - Callers and callees: a new precondition, a changed return shape, a new error value, an
   ordering dependency; for an interface, every implementation.
+- What the diff makes harder, a `minor` finding that cites what already exists by `file:line`
+  (bsc-geth's reviewer had this angle; prediction-bot#665): logic duplicated from an existing
+  helper; state derivable from what is already held (a count beside the slice it counts); a
+  special case layered on shared code where the mechanism itself should have generalized (in
+  the fork, a branch inside an upstream path instead of an `Ext` hook). With nothing to cite,
+  it is a preference.
 - A go-ethereum API in the diff resolves to the pinned fork: `bsc-fork show <Symbol>`. An API
   with no fork `file:line` does not exist for this project. In a fork root there is no index:
   the tree under review is the reference.
@@ -88,7 +94,9 @@ that trigger it and the wrong result, or when the mechanism is real and the trig
 timing, configuration or environment (say what would confirm it). Drop it when a quotable line
 contradicts it, a type or constant makes it impossible, or the diff already guards it. Merge
 candidates that point at one line and one mechanism. A realistic state is never dropped for
-being speculative: an interleaving, a cold cache, an error path, a reachable nil.
+being speculative: an interleaving, a cold cache, an error path, a reachable nil. A
+what-it-makes-harder candidate is kept when the helper, state or mechanism it cites exists at
+that `file:line` and does what the diff re-does; it has no trigger to name.
 
 ## Return
 
@@ -97,10 +105,11 @@ Each finding is `{title, file, line, severity, why}`:
 - `file` is repo-relative to the tree the brief names; `line` is the line at `HEAD`.
 - `severity`: `blocker` — a broken invariant from the table, a wrong result, a crash, data
   loss, or a contract line not met. `major` — a defect with a real trigger that the gates do
-  not catch, or a test that cannot fail. `minor` — everything else that is still a defect.
-  Preferences are not findings.
+  not catch, or a test that cannot fail. `minor` — everything else that is still a defect,
+  and what the diff makes harder. Preferences are not findings.
 - `why` is the failure and its trigger in one or two sentences, with the rule's home when an
-  angle applies (`discipline rule 12`). No fix essay: the fixer reads the code.
+  angle applies (`discipline rule 12`); for what the diff makes harder, what it re-does or
+  bypasses and the existing `file:line`. No fix essay: the fixer reads the code.
 
 `enumerated` is required, as §Scope says. Praise nothing and never restate the diff.
 
