@@ -3,15 +3,17 @@ name: fork-development
 description: "Changing bsc-geth itself: the two roots, the pin, the checkout, go.work, the edit-to-pin loop."
 ---
 
-**When to load:** Use when changing the bsc-geth fork itself, in a session rooted in a bsc-geth clone or from a prediction-bot session through BSC_FORK_PATH — editing, building, testing, committing or pushing fork code, moving the go.mod fork pin, or deciding whether a change belongs in the fork or in the bot. Covers the two roots, the three trees (pin, checkout, go.work), the edit-to-pin loop, the fork's commands, branches, architecture and commit conventions.
+**When to load:** Use when changing the bsc-geth fork itself — most often in a session rooted in a bsc-geth clone, or from a prediction-bot session through BSC_FORK_PATH when a bot change needs a fork change — editing, building, testing, committing or pushing fork code, moving the go.mod fork pin (only for a change to what pb consumes, pb ADR 0127), or deciding whether a change belongs in the fork or in the bot. Covers the two roots, the three trees (pin, checkout, go.work), the edit-to-pin loop, the fork's commands, branches, architecture and commit conventions.
 
 # Developing the fork
 
-bsc-geth is developed three ways (operator, 2026-10-14): in a session rooted in a bsc-geth
-clone (node work only); from a prediction-bot session, in the clone `BSC_FORK_PATH` names; and,
-for a bot change that needs a fork change, the second way twice in one pb session (the fork
-first, then the pin move, then the bot). One clone per open session: a pb session's
-`BSC_FORK_PATH` never names a clone another session has open.
+bsc-geth is developed three ways (operator, 2026-10-14). Most fork work is node-internal and
+runs in a session rooted in a bsc-geth clone; it ends at the push to `mrinal/dev`, and
+prediction-bot stays on its pin (pb ADR 0127: the pin is informational, and pb re-pins only
+when a change alters what it consumes). Fork work can also run from a prediction-bot session,
+in the clone `BSC_FORK_PATH` names; and a bot change that needs a fork change is that, twice in
+one pb session: the fork first, then the pin move, then the bot. One clone per open session: a
+pb session's `BSC_FORK_PATH` never names a clone another session has open.
 
 The fork's `CLAUDE.md` holds its facts: a bsc-rooted session loads it, a pb session does not.
 Its steering is the kit's. Anything else tracked under its `.claude/` is stray (the
@@ -52,7 +54,12 @@ before the first fork edit, and again before claiming a bot test proved a fork c
 ## The loop
 
 Steps marked **pb** run in a prediction-bot session only. From a bsc-geth session the loop
-is steps 1, 3 and 5; the pin then moves in a prediction-bot session (steps 6 to 8).
+is steps 1, 3 and 5, and it ends at the push. pb re-pins only for a change to what it consumes:
+a method pb calls, a field it decodes, a `-1039xxx` code it switches on, a feature-status key it
+reads. bsc's announcement for the build names any such change, from its diff over the fork
+files pb's code cites (pb ADR 0127 decision 4). Only then do steps 6 to 8 run, in a
+prediction-bot session, once the node that serves the change is live: the pin never passes the
+deployed node (decision 3).
 
 1. **Branch.** The fork tree is on `mrinal/dev` (or a branch cut from it), never `master`
    or `mrinal/master`. In pb, `bsc-fork pin` shows the branch.
@@ -65,7 +72,8 @@ is steps 1, 3 and 5; the pin then moves in a prediction-bot session (steps 6 to 
 5. **Commit and push the fork** (conventions below): with its gate green,
    `git push origin mrinal/dev`, behind `.githooks/pre-push`. No CI runs and no confirmation
    is needed (operator, 2026-10-14); a production deploy is the operator's.
-6. **pb: move the pin**, with the pushed commit's full SHA:
+6. **pb: move the pin**, for a consumed-API change only (above), with the pushed commit's
+   full SHA:
    `go mod edit -replace=github.com/ethereum/go-ethereum=github.com/mrinaldhillon/bsc-geth@<sha>`
    then `go mod tidy`, which rewrites the SHA as a pseudo-version (checked, go 1.27.1).
    The pin must be on `mrinal/dev`: `make fork-pin-check`.
