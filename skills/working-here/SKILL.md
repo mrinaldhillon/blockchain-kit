@@ -72,7 +72,7 @@ The class is read off the diff and decides the ceremony. The last two rows are b
 |---|---|---|---|---|
 | Prose | docs, comments, `CLAUDE.md` | none, and no PR of its own (below) | none | none |
 | Tooling | `dev-setup/`, `scripts/`, Makefile, CI workflow, `tools/` | the lanes the selector names | none | none |
-| Product Go | `cmd/`, `internal/` | the lanes the selector names | one seat at merge: the workflow's, or one `blockchain-kit:code-reviewer` dispatch briefed with the PR body and its issue or ADR | none |
+| Product Go | `cmd/`, `internal/` | the lanes the selector names | one seat at merge: the workflow's, or one `blockchain-kit:code-reviewer` dispatch briefed with the PR body and its issue or ADR; `/blockchain-kit:review` when the user runs it | none |
 | Guarded Go | record spine, hot path, money path | the same, plus `make replay-parity` when owed | the same, and you read the diff | an ADR only when an invariant, a stored-data contract or a boundary changes |
 | Fork Go | `*_ext.go`, and upstream files under the wiring rule | package-scoped gates in a capped unit on srv, then `make audit-ext`; `make lint` before a push | one seat, with the `Ext` and landmine angles | an ADR only for a decision about the node |
 | Host | `deploy/production/` | `bash deploy/production/host/tests/run.sh`; `check-config-ext.sh` and `host/geth-preflight.sh` before a `config.toml` or `ExecStart` change | none | none; the install itself is the operator's |

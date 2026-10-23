@@ -83,6 +83,14 @@ class ImplementArgs(unittest.TestCase):
         both = {**ARGS, "project": "/given", "module": "example.com/given"}
         self.assertEqual(self.run_hook(self.call(both), self.env(self.bot)), (0, "", ""))
 
+    def test_the_review_workflow_is_told_too(self):
+        for name in ("blockchain-kit:review", "review"):
+            with self.subTest(name=name):
+                review = {"base": "a" * 40, "head": "b" * 40}
+                new = self.rewritten(self.run_hook(self.call(review, name=name), self.env(self.fork)))
+                self.assertEqual(new["args"], {**review, "project": self.fork,
+                                               "module": "github.com/ethereum/go-ethereum"})
+
     def test_a_fork_root_gets_project_and_module_filled_in(self):
         # the script reads an in-place fork run off these two; `fork` unset or equal to `project`
         cases = [
