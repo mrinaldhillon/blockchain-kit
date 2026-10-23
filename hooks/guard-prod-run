@@ -67,8 +67,13 @@ stdbuf setsid command, each with its own options (and their values) and, for tim
 and nice, a duration or number operand. `bash|sh|zsh|dash -c '<program>'` recurses into
 the program, three levels at most.
 
-A shlex parse error (an unterminated quote; a heredoc whose body has an apostrophe
-produces one) does not deny by itself. On that path the raw text is denied only when
+A heredoc body is data, not a command: it is removed before classification, so a commit
+message (`git commit -F - <<'EOF'`, `-m "$(cat <<'EOF' … EOF)"`) that names a guarded
+binary or `make test` never denies (kit #29). The one exception is a body a shell reads
+as its program (`bash <<'EOF'`, a shell with no -c): that body is classified, within the
+same three levels.
+
+A shlex parse error (an unterminated quote) does not deny by itself. On that path the raw text is denied only when
 a guarded name appears as a whole path-word (after the start, whitespace, `/`, `;`,
 `&` or `|`, and before whitespace or the end), or when `go run` precedes a
 cmd/<name> mention: over-detection, confined to commands that name a guarded binary.
@@ -81,8 +86,9 @@ Residuals: real runs it does not see, and over-detections it keeps.
   - A program run as another program's argument (`xargs bot`, `find … -exec bot`,
     `watch bot`), and `go run .` from inside cmd/<name>, are not seen.
   - A function body classifies as if it ran: `f() { bot; }` denies.
-  - A heredoc body is tokenized like the command text: a body line whose first word
-    is a guarded name denies.
+  - A heredoc fed to anything but a shell is not read: `python3 <<'EOF'` is opaque, as a
+    `python -c` program is. A `<<word` inside a quoted string reads as a heredoc and hides
+    the lines up to a line that is exactly `word` (to the end when there is none).
   - A quoted word that is all shell punctuation (`echo ";" bot`) reads as an operator.
   - A `#` comment is not one: its words are arguments of the command before it, and
     an operator inside it splits the command.
@@ -284,8 +290,51 @@ def shell_program(args: list[str]) -> str | None:
     return None
 
 
+HEREDOC = re.compile(r"(?<!<)<<(?!<)(-?)[ \t]*(?:'([^'\n]+)'|\"([^\"\n]+)\"|\\?([A-Za-z_][A-Za-z0-9_]*))")
+
+
+def feeds_shell(before: str) -> bool:
+    """True when the command a heredoc operator follows (`before`, its line up to `<<`) is a shell
+    that reads its program from stdin."""
+    try:
+        segs = segments(tokens(before))
+    except ValueError:
+        return False
+    found = command_word(segs[-1]) if segs else None
+    return found is not None and found[0] in SHELLS and shell_program(found[1]) is None
+
+
+def split_heredocs(text: str) -> tuple[str, list[str]]:
+    """(`text` with every heredoc body and its terminator line removed, the bodies a shell reads as its
+    program). A body runs to the line that is exactly its word (leading tabs stripped for `<<-`), or to the
+    end of the text."""
+    lines = text.split("\n")
+    kept: list[str] = []
+    programs: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        kept.append(line)
+        i += 1
+        for m in HEREDOC.finditer(line):
+            word = m.group(2) or m.group(3) or m.group(4)
+            body: list[str] = []
+            while i < len(lines):
+                here = lines[i]
+                i += 1
+                if (here.lstrip("\t") if m.group(1) else here) == word:
+                    break
+                body.append(here)
+            if feeds_shell(line[: m.start()]):
+                programs.append("\n".join(body))
+    return "\n".join(kept), programs
+
+
 def denied(command: str, depth: int = 0) -> bool:
     """True when `command` starts a guarded binary at command position."""
+    command, programs = split_heredocs(command)
+    if depth < MAX_DEPTH and any(denied(program, depth + 1) for program in programs):
+        return True
     try:
         toks = tokens(command)
     except ValueError:
@@ -382,6 +431,9 @@ def heavy_denied(command: str, cwd: str, depth: int = 0, seen: dict[str, bool] |
     """True when `command` runs whole-module work bare in a tree that is the fork. The tree is
     `cwd`, as moved by a `cd <dir>` segment before it, or the `-C <dir>` of make, go or git."""
     seen = {} if seen is None else seen
+    command, programs = split_heredocs(command)
+    if depth < MAX_DEPTH and any(heavy_denied(program, cwd, depth + 1, seen) for program in programs):
+        return True
     try:
         toks = tokens(command)
     except ValueError:
