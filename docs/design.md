@@ -155,7 +155,7 @@ Each hook has a kill switch in the `BLOCKCHAIN_KIT_*` family and reads project s
 | Command | Contract |
 |---|---|
 | `bsc-fork` | Unchanged. |
-| `bk-gate [-C DIR] <name> -- <command>` | Run one command, in the caller's directory or in `DIR`; print exactly one line `gate: <name> rc=<n> t=<s>s out=<path>` and, on red, the last ten lines of its output. Exit with the command's code. From pb `gate.py`. |
+| `bk-gate [-C DIR] <name> -- <command>` | Run one command, in the caller's directory or in `DIR`; print exactly one line `gate: <name> rc=<n> t=<s>s out=<path>` and, on red, the last ten lines of its output. Exit with the command's code. On the production host, run it inside its repository's cap: pb `dev-setup/ci/ci-cap.sh`, bsc-geth `cmd/verifyconstrained` (kit #7). From pb `gate.py`. |
 | `bk-mainloop-share <transcript-dir> <days>` | The classifier behind §2's table. The kit's one metric (§10). |
 | `blockchain-kit-setup`, `-update` | Accept `--scope user|project`; `installed_field` matches a project-scope install by `projectPath`. |
 
