@@ -34,7 +34,8 @@ Paths are in the fork tree. In a bsc-geth root run them as written; from predict
   fixture-sync (--check/--apply), geth-preflight.sh, nic-{tune,steer}-lt.sh,
   check-config-ext.sh. No CI runs on the working branch pair; this is
   the only evidence. After editing anything under `host/srv/`, run
-  `host/tests/fixture-sync.sh --apply` first.
+  `host/tests/fixture-sync.sh --apply` first. The host-test fixtures: `verify/ok` is the one
+  full tree; every other case is an overlay under `verify-overlay/<case>/` with a `DELETE` list.
 - Anything affecting `config.toml` semantics or the unit's `ExecStart` must keep
   **both** `deploy/production/check-config-ext.sh` (is it correct?) and
   `deploy/production/host/geth-preflight.sh` (does it load?) passing; neither implies

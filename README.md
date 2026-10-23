@@ -273,7 +273,7 @@ cloud session (GraphQL is refused); `gh api repos/...` works.
 **What the setup script places beyond Go.** gopls, the golangci-lint archive for `make lint`,
 the module cache, `shellcheck` (so `deploy/production/host/tests/run.sh` runs its shellcheck
 suite instead of SKIPping it) and `benchstat` (pinned to an x/perf version in the script; the before/after perf gate of the fork's hygiene
-refactor, `docs/superpowers/plans/2026-10-16-fork-hygiene-refactor.md` in bsc-geth). Each step
+refactor, `2026-10-16-fork-hygiene-refactor.md` in bsc-geth's plan history). Each step
 is tolerated absent, capped so the five-minute cache window holds, and named in the setup
 output, which ends with whether shellcheck and benchstat landed; `go generate` needs nothing extra, since
 bsc-geth pins gencodec with a go.mod `tool` directive and `go mod download` warms it.

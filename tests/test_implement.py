@@ -204,6 +204,7 @@ class Implement(unittest.TestCase):
             # the gate defaults to make audit-ext, run in the project's tree; the review rule is the Ext convention
             self.assertIn("  bk-gate run -- make audit-ext\n", by["gate"]["prompt"])
             self.assertIn("the Ext convention and the rebase landmines", by["review"]["prompt"])
+            self.assertIn(f"{root}/docs/fork/README.md", by["review"]["prompt"])  # the one fork docs path, absolute
             self.assertNotIn("bsc-fork show", by["review"]["prompt"])
             self.assertIn("git merge --no-edit", by["integrate"]["prompt"])
         self.assertIn("2 unit(s) · fork in place · tree=/src/bsc-geth", "\n".join(ran["logs"]))
@@ -254,6 +255,7 @@ class Implement(unittest.TestCase):
         self.assertIsNone(by["lane:a"]["isolation"])
         self.assertIn(f"must print {'1' * 40}", by["lane:b"]["prompt"])  # b starts where a ended
         self.assertIn(f'bk-gate -C "{fork}" run -- make audit-ext', by["gate"]["prompt"])
+        self.assertIn(f"{fork}/docs/fork/README.md", by["review"]["prompt"])  # under the fork, not the client's cwd
         self.assertEqual((out["merged"], [h["unit"] for h in out["handbacks"]]), (["a"], ["b"]))
         self.assertEqual([(s["unit"], s["reason"]) for s in out["stalled"]], [("c", "not started: lane b handed back")])
         self.assertEqual(out["owed"], {"parity": [], "read": []})

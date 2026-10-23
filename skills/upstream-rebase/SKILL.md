@@ -28,9 +28,10 @@ until the last step.
 1. Fetch the target:
    `git fetch https://github.com/bnb-chain/bsc.git tag vNEW --no-tags`
    (and refresh `origin/master`, which tracks upstream).
-2. **Consume the fork's `docs/upstream-rebase-landmines.md`** (full inventory:
-   `docs/reviews/2026-10-04-rebase-v180-inventory.md`; `references/landmines.md`
-   points there) — it is written for exactly this moment: removed config keys
+2. **Consume the fork's rebase landmines** (its docs index, `docs/fork/README.md`, lists the
+   document; the full inventory is `2026-10-04-rebase-v180-inventory.md` in the review history
+   the index names; `references/landmines.md` points there) — it is written for exactly
+   this moment: removed config keys
    that are fatal at startup, removed mechanisms that take fork hooks with them,
    and the deliberately re-semanticized surfaces that must keep the fork's
    version in every conflict, not upstream's.
@@ -87,7 +88,7 @@ rebase adds:
   deploy pairing, plus a `dumpconfig` decode of the production `config.toml`
   with the freshly built binary and a re-validation of every `ExecStart`
   flag — read stderr, not just exit codes. Removed-upstream keys must stay
-  removed (`docs/upstream-rebase-landmines.md` names the fatal ones).
+  removed (the landmines document names the fatal ones).
 - **Ext surface:** `make audit-ext` exits 0 on the rebased tree. The
   rename direction matters most here — conflict resolution is where an
   upstream symbol accidentally picks up a fork marker.
@@ -119,13 +120,14 @@ rebase adds:
   prediction-bot session: `blockchain-kit:fork-development` §The loop, steps 6
   to 8. The old pin's commit is no longer on `mrinal/dev` after the force-push;
   until the pin moves, `make fork-pin-check` is red.
-- **Rewrite the fork's `docs/upstream-rebase-landmines.md` for the next
+- **Rewrite the fork's landmines document for the next
   target** — each rebase consumes it and refills it for the following one, in
   a bsc-geth commit. The kit's `references/landmines.md` stays a pointer.
 - The production cutover, soak, and PGO recapture are out of scope:
   `deploy/production/CUTOVER_RUNBOOK.md` owns them.
-- Open work from the run is issues; a durable inventory goes under the fork's
-  `docs/reviews/` (as `2026-10-04-rebase-v180-inventory.md` did). No plan or
+- Open work from the run is issues; a durable inventory goes in the fork's
+  review history (as `2026-10-04-rebase-v180-inventory.md` did). No plan or
   ledger is tracked. Worked example of this whole method (the v1.7.8
-  adoption, a record of the past): `docs/superpowers/plans/2026-08-16-fork-rebase-v1.7.8.md`
-  and `docs/superpowers/specs/2026-08-16-fork-rebase-v1.7.8-design.md`.
+  adoption, a record of the past): `2026-08-16-fork-rebase-v1.7.8.md` in the plan history
+  and `2026-08-16-fork-rebase-v1.7.8-design.md` in the spec history. The fork's docs index,
+  `docs/fork/README.md`, names all three history directories.

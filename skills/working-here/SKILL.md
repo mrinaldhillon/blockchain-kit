@@ -19,7 +19,8 @@ anything here.
    in an issue. No plan, spec, ledger or resume file is tracked in either repository.
 2. **Persist open work as issues.** An issue body carries the units still to do, with their
    contracts. A deferral is `gh issue create`, at the moment it is found. Milestone state is
-   `docs/project-context.md` (pb) or `docs/PROJECT_CONTEXT.md` (bsc-geth). An issue about
+   `docs/project-context.md` (pb) or bsc-geth's project context (its docs index,
+   `docs/fork/README.md`, lists it). An issue about
    Claude itself (steering, this kit, a hook, skill, agent or workflow, the harness, model
    cost) is filed in `mrinaldhillon/blockchain-kit`, never in the repository you are in
    (operator, 2026-10-14).
@@ -73,8 +74,9 @@ The class is read off the diff and decides the ceremony. The last two rows are b
 - **One branch per change, whatever it touches.** Code, its docs and its tooling land together.
 - **A fact has one home, so a change has one edit.** A fact about the code lives in the
   repository's `docs/` and changes in the PR that changes the code. Kit skills route to it.
-- **An ADR records a decision about the product**, in `docs/decisions/` (pb) or `docs/adr/`
-  (bsc-geth). A prose edit, a tooling change and a change to this kit never get one.
+- **An ADR records a decision about the product**, in `docs/decisions/` (pb) or the ADR
+  directory bsc-geth's docs index (`docs/fork/README.md`) names. A prose edit, a tooling change
+  and a change to this kit never get one.
 - **Nothing is gated twice.** No local composite before the GitHub run. A known-long command
   runs as foreground Bash at the tool's longest timeout, unless other work runs beside it: past
   that timeout the harness moves it to the background and notifies on exit, and a background

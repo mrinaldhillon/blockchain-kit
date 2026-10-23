@@ -242,9 +242,9 @@ bsc-geth keeps pb's shape (D§4.2, decided 2026-10-09), and the fork is develope
 clone or from pb (D§2, decided 2026-10-14). Everything lands on `mrinal/dev`; `mrinal/master`
 is not touched (operator, 2026-10-14).
 
-1. **Facts to bsc-geth `docs/`.** The feature inventory to `docs/fork-features.md`, the v1.8.0
-   landmines to `docs/upstream-rebase-landmines.md` (full inventory:
-   `docs/reviews/2026-10-04-rebase-v180-inventory.md`), the on-host `cmd/campaign` command
+1. **Facts to bsc-geth `docs/`.** The feature inventory and the v1.8.0 landmines to their own
+   documents (full inventory: `2026-10-04-rebase-v180-inventory.md`; since bsc-geth PR 157 all
+   of them sit under `docs/fork/`, listed in `docs/fork/README.md`), the on-host `cmd/campaign` command
    line to `cmd/campaign/README.md`. The kit's `features.md` and `landmines.md` become
    pointers.
 2. **The kit serves a bsc-rooted session** (this kit change): the routing table, the
@@ -268,7 +268,7 @@ Follow-ups, not in this phase:
 - bsc-geth's Makefile heavy targets refuse an uncapped run on the prod host, so the rule
   holds without the kit's hook.
 - The `dev.slice` comment, at the next host install.
-- `docs/superpowers/plans/` in bsc-geth consolidated into issues.
+- bsc-geth's old plan directory consolidated into issues (its plan history now sits under `docs/fork/history/`).
 - Kit PR B: the `implement` workflow's in-place fork mode (D§7): landed as kit #16's fix.
 
 ## Phase 6 — issues
