@@ -45,9 +45,10 @@ DENIED = (
     "go run cmd/replay/main.go -from 1",
     "if ./bin/bot --dry; then echo ok; fi",
     "x=$(bot)",
-    # a parse error (the apostrophe) that names a guarded binary as a path-word
-    "git commit -F - <<'EOF'\ndocs: don't run ./bin/bot here\nEOF",
     "go run ./cmd/replay it's",
+    # a heredoc a shell reads as its program is a command, and a run after a heredoc is one too
+    "bash <<'EOF'\n./bin/bot --env prod\nEOF",
+    "cat <<'EOF' > notes\nx\nEOF\n./bin/replay -x",
 )
 ALLOWED = (
     "scripts/replay-run.sh -- ./bin/replay x",
@@ -62,9 +63,12 @@ ALLOWED = (
     "echo x > bot",
     "grep -n replay internal/replay/*.go",
     'git commit -m "it\'s the bot"',
-    # a parse error (the apostrophe) whose only mention of bot is prose: `bot"` is not a path-word
-    "git commit -F - <<'EOF'\ndocs: don't call it \"the bot\"\nEOF",
     "bash -c 'ls bin/bot'",
+    # a commit message is data, however it names a binary (kit #29)
+    "git commit -F - <<'EOF'\ndocs: don't call it \"the bot\"\nEOF",
+    "git commit -F - <<'EOF'\ndocs: don't run ./bin/bot here\nEOF",
+    "git commit -F - <<'EOF'\nreplay now reads the seal\nbot\nEOF",
+    "git commit -m \"$(cat <<'EOF'\nfix cmd/replay: don't drop 2026-10-16-collector-bsc-kind15 frames\nEOF\n)\"",
 )
 
 
@@ -129,6 +133,7 @@ SCOPED = (
     "golangci-lint --version",
     "go run build/ci.go install",
     "grep -n 'make test' Makefile",
+    "git commit -F - <<'EOF'\nbuild: make test runs in a unit now\nmake lint\nEOF",
 )
 NODE_GOMOD = "module github.com/ethereum/go-ethereum\n\ngo 1.24\n"
 CLIENT_GOMOD = ("module example.com/bot\n\ngo 1.26\n\nrequire github.com/ethereum/go-ethereum v1.16.3\n\nreplace "
