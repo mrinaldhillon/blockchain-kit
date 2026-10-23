@@ -35,16 +35,22 @@ Contract:
      and says which on one stderr line. A tree with neither runs bare, and stderr says
      it ran uncapped. The verdict line and the out file are unchanged: the cap tool's
      own lines, a refusal included, are part of the output.
+     At most two capped gates run at once on the host (operator, 2026-10-23): each
+     holds one of two flock slots under /var/tmp/blockchain-kit-gate-slots/ for its
+     run, a third says on stderr that it waits and starts when one frees; t= does not
+     count the wait. A slot directory that cannot be used is said and skipped.
 
 A usage error (no name, no `--`, no command, an unknown leading option) prints one
 `bk-gate: ...` line on stderr and no verdict line.
 
-Env:  BLOCKCHAIN_KIT_GATE_CAP=0 never wraps · BLOCKCHAIN_KIT_IPC names the IPC path probed.
+Env:  BLOCKCHAIN_KIT_GATE_CAP=0 never wraps · BLOCKCHAIN_KIT_IPC names the IPC path probed ·
+      BLOCKCHAIN_KIT_GATE_SLOTS_DIR moves the slot directory (a test seam).
 Exit: the command's rc · 128+N killed by signal N · 127 not spawned · 2 usage.
 """
 
 from __future__ import annotations
 
+import fcntl
 import os
 import re
 import subprocess
@@ -60,6 +66,8 @@ TAIL = 10
 PB_CAP = Path("dev-setup/ci/ci-cap.sh")
 BSC_CAP = Path("cmd/verifyconstrained")
 BSC_CAP_BIN = Path("build/bin/verifyconstrained")
+SLOTS = 2  # capped gates at once on the production host (operator, 2026-10-23)
+SLOT_DIR = Path("/var/tmp/blockchain-kit-gate-slots")
 
 
 class Usage(Exception):
@@ -89,21 +97,22 @@ def parse(argv: list[str]) -> tuple[str | None, str, list[str]] | None:
     return cwd, name, command
 
 
-def capped(command: list[str], cwd: str | None) -> tuple[list[str], str]:
-    """(the argv to run, the stderr note or ''): the command inside its tree's cap on the production host."""
+def capped(command: list[str], cwd: str | None) -> tuple[list[str], str, bool]:
+    """(the argv to run, the stderr note or '', whether it is wrapped): the command inside its tree's cap on the
+    production host."""
     if os.environ.get("BLOCKCHAIN_KIT_GATE_CAP") == "0" or (cwd is not None and not os.path.isdir(cwd)):
-        return command, ""
+        return command, "", False
     import bkhost
     import bkworktree as wt
 
     if not bkhost.prod_host():
-        return command, ""
+        return command, "", False
     try:
         root = wt.session_tree(Path(cwd or os.getcwd()))
     except (wt.WorktreeError, OSError, subprocess.SubprocessError):
         root = None
     if root is not None and (root / PB_CAP).is_file():
-        return [str(root / PB_CAP), "--", *command], f"capped by {PB_CAP}"
+        return [str(root / PB_CAP), "--", *command], f"capped by {PB_CAP}", True
     if root is not None and (root / BSC_CAP / "main.go").is_file():
         trees = [root]
         try:
@@ -113,10 +122,39 @@ def capped(command: list[str], cwd: str | None) -> tuple[list[str], str]:
         for tree in trees:
             built = tree / BSC_CAP_BIN
             if built.is_file() and os.access(built, os.X_OK):
-                return [str(built), "--", *command], f"capped by {built}"
+                return [str(built), "--", *command], f"capped by {built}", True
         return (["go", "run", str(root / BSC_CAP), "--", *command],
-                f"capped by go run {BSC_CAP} (no built binary; a failure reads rc 1)")
-    return command, "production host and no cap tool in this tree: running uncapped"
+                f"capped by go run {BSC_CAP} (no built binary; a failure reads rc 1)", True)
+    return command, "production host and no cap tool in this tree: running uncapped", False
+
+
+def slot(name: str):  # noqa: ANN201 - the open lock file, or None
+    """Hold one of SLOTS host-wide gate slots until this process exits; None when the directory is unusable."""
+    where = Path(os.environ.get("BLOCKCHAIN_KIT_GATE_SLOTS_DIR") or SLOT_DIR)
+    try:
+        where.mkdir(mode=0o700, parents=True, exist_ok=True)
+        files = [open(where / f"slot-{i}.lock", "a") for i in range(SLOTS)]  # noqa: SIM115 - held past this call
+    except OSError as err:
+        print(f"bk-gate: {name}: no gate slot ({where}: {err.strerror}); running without one", file=sys.stderr)
+        return None
+    waited = None
+    while True:
+        for held in files:
+            try:
+                fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                continue
+            for other in files:
+                if other is not held:
+                    other.close()
+            if waited is not None:
+                print(f"bk-gate: {name}: got a gate slot after {time.monotonic() - waited:.1f}s", file=sys.stderr)
+            return held
+        if waited is None:
+            waited = time.monotonic()
+            print(f"bk-gate: {name}: waiting for a gate slot ({SLOTS} capped gates are running on this host)",
+                  file=sys.stderr, flush=True)
+        time.sleep(0.5)
 
 
 def emit(text: str) -> None:
@@ -133,9 +171,10 @@ def main(argv: list[str]) -> int:
         print((__doc__ or "").strip())
         return 0
     cwd, name, command = parsed
-    command, note = capped(command, cwd)
+    command, note, wrapped = capped(command, cwd)
     if note:
-        print(f"bk-gate: {name}: {note}", file=sys.stderr)
+        print(f"bk-gate: {name}: {note}", file=sys.stderr, flush=True)
+    held = slot(name) if wrapped else None  # noqa: F841 - the slot is held while this process runs
 
     started = time.monotonic()
     try:

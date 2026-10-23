@@ -5,6 +5,7 @@ Run: tests/run   (or: python3 -m unittest discover -s tests)
 
 from __future__ import annotations
 
+import fcntl
 import os
 import re
 import socket
@@ -32,6 +33,7 @@ class Gate(unittest.TestCase):
         env = {k: v for k, v in os.environ.items() if not k.startswith("BLOCKCHAIN_KIT_")}
         env["TMPDIR"] = str(self.tmp)
         env["BLOCKCHAIN_KIT_IPC"] = str(self.tmp / "absent.ipc")  # a dev host, whatever host runs the suite
+        env["BLOCKCHAIN_KIT_GATE_SLOTS_DIR"] = str(self.tmp / "slots")  # never the host's real slots
         env.update(more)
         return env
 
@@ -99,9 +101,8 @@ class Gate(unittest.TestCase):
         self.assertIn("gate: <name> rc=<n> t=<S>s out=<path>", done.stdout)
 
 
-    def test_on_the_production_host_a_gate_runs_inside_its_trees_cap(self):
-        # The invariant: on the host that runs geth and the collectors, a gate never runs outside the cap its
-        # repository ships; on any other host, or with the switch off, bk-gate is what it always was.
+    def prod_socket(self) -> Path:
+        """A real unix socket at a temp IPC path: lib/bkhost.py then reads this host as production."""
         ipc = self.tmp / "geth.ipc"
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.addCleanup(sock.close)
@@ -111,22 +112,29 @@ class Gate(unittest.TestCase):
             sock.bind(ipc.name)
         finally:
             os.chdir(back)
-        fake = '#!/bin/sh\nprintf "%s\\n" "$0" "$@" > "$CAP_LOG"\n[ "$1" = "--" ] && shift\nexec "$@"\n'
+        return ipc
 
-        def tree(name: str, *, tool: str | None = None, source: bool = False) -> Path:
-            root = self.tmp / name
-            subprocess.run(["git", "init", "-q", str(root)], check=True)
-            subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
-                            "--allow-empty", "-m", "i"], check=True)
-            if source:
-                (root / "cmd/verifyconstrained").mkdir(parents=True)
-                (root / "cmd/verifyconstrained/main.go").write_text("package main\n")
-            if tool:
-                (root / tool).parent.mkdir(parents=True, exist_ok=True)
-                (root / tool).write_text(fake)
-                (root / tool).chmod(0o755)
-            return root
+    def tree(self, name: str, *, tool: str | None = None, source: bool = False) -> Path:
+        """A git repository; `tool` is a fake cap that logs its argv to $CAP_LOG and runs the command."""
+        root = self.tmp / name
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+        subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                        "--allow-empty", "-m", "i"], check=True)
+        if source:
+            (root / "cmd/verifyconstrained").mkdir(parents=True)
+            (root / "cmd/verifyconstrained/main.go").write_text("package main\n")
+        if tool:
+            (root / tool).parent.mkdir(parents=True, exist_ok=True)
+            (root / tool).write_text('#!/bin/sh\nprintf "%s\\n" "$0" "$@" > "$CAP_LOG"\n[ "$1" = "--" ] && shift\n'
+                                     'exec "$@"\n')
+            (root / tool).chmod(0o755)
+        return root
 
+    def test_on_the_production_host_a_gate_runs_inside_its_trees_cap(self):
+        # The invariant: on the host that runs geth and the collectors, a gate never runs outside the cap its
+        # repository ships; on any other host, or with the switch off, bk-gate is what it always was.
+        ipc = self.prod_socket()
+        tree = self.tree
         pb = tree("pb", tool="dev-setup/ci/ci-cap.sh")
         bsc = tree("bsc", tool="build/bin/verifyconstrained", source=True)
         lane = self.tmp / ".bsc.worktrees/wf_1"  # a lane beside the clone: the source, not the built binary
@@ -151,6 +159,30 @@ class Gate(unittest.TestCase):
             self.assertEqual(log.read_text().splitlines()[:2] if log.exists() else None,
                              [str(tool), "--"] if tool else None, case)
             self.assertIn(said, done.stderr, case) if said else self.assertEqual(done.stderr, "", case)
+
+
+    def test_on_the_production_host_a_third_capped_gate_waits_for_a_slot(self):
+        # The invariant: at most two capped gates hold memory on the production host at once (operator, 2026-10-23).
+        env = self.env(BLOCKCHAIN_KIT_IPC=str(self.prod_socket()), CAP_LOG=str(self.tmp / "cap.argv"))
+        slots = Path(env["BLOCKCHAIN_KIT_GATE_SLOTS_DIR"])
+        slots.mkdir()
+        held = [open(slots / f"slot-{i}.lock", "a") for i in range(2)]  # two gates already running
+        for f in held:
+            self.addCleanup(f.close)
+            fcntl.flock(f, fcntl.LOCK_EX)
+        third = subprocess.Popen([str(GATE), "-C", str(self.tree("pb", tool="dev-setup/ci/ci-cap.sh")), "t", "--",
+                                  PY, "-c", "print('ran')"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 text=True, env=env, cwd=self.tmp)
+        self.addCleanup(third.kill)
+        assert third.stderr is not None
+        self.assertIn("capped by", third.stderr.readline())
+        self.assertIn("waiting for a gate slot", third.stderr.readline())
+        self.assertFalse((self.tmp / "cap.argv").exists())  # it waits before the cap tool starts
+        held[1].close()  # one gate finishes
+        out, err = third.communicate(timeout=30)
+        self.assertRegex(out, r"^gate: t rc=0 ")
+        self.assertIn("got a gate slot after", err)
+        self.assertTrue((self.tmp / "cap.argv").exists())
 
 
 if __name__ == "__main__":
