@@ -128,7 +128,7 @@ and branch protection on `main` requires `ci` and `steering`, strict, admins inc
 | Agent | Tier | Change from `6796a58` |
 |---|---|---|
 | `golang-implementer` | opus | Drops `LSP` from `tools:` (it is never in the live roster — measured). Its "never `git commit`; a brief cannot lift that" rule is replaced by the lane contract (§7): at `6796a58` both probe lanes refused to commit against the brief (measured). Absorbs `golang-implementer-lite`, which is deleted: implementation runs at opus (decided). |
-| `code-reviewer` (new) | opus | One seat over the merged diff of a run. Carries pb's reserved angles: determinism and parity, the record spine, import boundaries, hot-path blocking. Read and Bash only. |
+| `code-reviewer` (new) | opus | One seat over the merged diff of a run. Carries pb's reserved angles: determinism and parity, the record spine, import boundaries, hot-path blocking. Read, Bash and the read-only gopls tools (callers and implementations; pb's reviewer had them before the cut). A dispatch outside a run is briefed with the PR body and the issue, ADR or plan it names. |
 | `determinism-auditor`, `parity-auditor`, `fork-indexer`, `fixture-capturer`, `infra-profiler` | opus | Unchanged. An agent without `ToolSearch` gets its granted `mcp__gopls__*` tools undeferred and callable (measured on `parity-auditor`), so the auditors need no new grant. |
 
 pb's other eleven agents are not carried (§6).
