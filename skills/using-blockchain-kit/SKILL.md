@@ -32,7 +32,7 @@ anything here.
 | An issue about Claude itself: steering, this kit, a hook, skill, agent or workflow, the harness, model cost | `gh issue create -R mrinaldhillon/blockchain-kit`, never the repository you are in |
 | A Go slice whose contract is written, in the bot or in the fork | the `blockchain-kit:golang-implementer` agent |
 | A lane that mixes Go with records, docs or Python, which the implementer may not touch | a general-purpose agent, with `blockchain-kit:go` named in its brief |
-| A product-Go diff about to land that no workflow run reviewed | the `blockchain-kit:code-reviewer` agent, once |
+| A product-Go diff about to land that no workflow run reviewed | the `blockchain-kit:code-reviewer` agent, once; its brief carries the PR body and the issue, ADR or plan it names as the contract |
 | Before claiming a gate that depends on parity | the `blockchain-kit:parity-auditor` agent, in a snapshot the brief names |
 | The fork pin moved, or a needed symbol is not in the index | the `blockchain-kit:fork-indexer` agent |
 | The one-time live capture of test fixtures | the `blockchain-kit:fixture-capturer` agent |
