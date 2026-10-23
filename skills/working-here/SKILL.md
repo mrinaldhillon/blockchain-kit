@@ -70,7 +70,7 @@ The class is read off the diff and decides the ceremony. The last two rows are b
 
 | Class | The diff | Gate | Review | Record |
 |---|---|---|---|---|
-| Prose | docs, comments, `CLAUDE.md` | none: `land` posts `ci` with no run | none | none |
+| Prose | docs, comments, `CLAUDE.md` | none, and no PR of its own (below) | none | none |
 | Tooling | `dev-setup/`, `scripts/`, Makefile, CI workflow, `tools/` | the lanes the selector names | none | none |
 | Product Go | `cmd/`, `internal/` | the lanes the selector names | one seat at merge: the workflow's, or one `blockchain-kit:code-reviewer` dispatch | none |
 | Guarded Go | record spine, hot path, money path | the same, plus `make replay-parity` when owed | the same, and you read the diff | an ADR only when an invariant, a stored-data contract or a boundary changes |
@@ -78,6 +78,9 @@ The class is read off the diff and decides the ceremony. The last two rows are b
 | Host | `deploy/production/` | `bash deploy/production/host/tests/run.sh`; `check-config-ext.sh` and `host/geth-preflight.sh` before a `config.toml` or `ExecStart` change | none | none; the install itself is the operator's |
 
 - **One branch per change, whatever it touches.** Code, its docs and its tooling land together.
+- **A prose change never costs a PR** (operator, 2026-10-23). In prediction-bot it rides the next
+  code PR: `main` takes only what `origin/main` holds and requires a PR. In bsc-geth it is pushed
+  to `mrinal/dev`. In this kit it is committed and pushed to `main`.
 - **A fact has one home, so a change has one edit.** A fact about the code lives in the
   repository's `docs/` and changes in the PR that changes the code. Kit skills route to it.
 - **An ADR records a decision about the product**, in `docs/decisions/` (pb) or the ADR
