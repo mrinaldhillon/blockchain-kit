@@ -19,7 +19,9 @@ and then these lines, in this order:
   Host: ...             PRODUCTION when the geth IPC path is a unix socket (the
                         recorder archive is on this host), else dev; lib/bkhost.py.
                         The client's PRODUCTION line adds that its tests run offline
-                        against fixtures; the fork's does not
+                        against fixtures; the fork's does not. Either ends with the
+                        probe's UTC time: one stat at session start, so a session
+                        started during a geth restart reads dev for its life (kit #7)
   Git guard: ...        only when the main-ref guard is off in the session's checkout:
                         core.hooksPath unset, its reference-transaction hook missing,
                         or that hook not executable (a relative hooksPath resolves
@@ -97,10 +99,13 @@ def host_line(fork: bool) -> str:
     import bkhost
 
     ipc = bkhost.ipc_path()
+    probed = time.strftime("%H:%M:%SZ", time.gmtime())
     if bkhost.prod_host():
         line = f"Host: PRODUCTION — geth IPC live at {ipc}; the recorder archive is on this host."
-        return line if fork else f"{line} Tests run offline against fixtures."
-    return f"Host: dev — no geth IPC at {ipc}."
+        line = line if fork else f"{line} Tests run offline against fixtures."
+        return f"{line} Probed once at {probed}; guard-prod-run re-checks on every Bash call."
+    return (f"Host: dev — no geth IPC at {ipc}. Probed once at {probed}: a geth restart reads as dev, so "
+            f"re-check with `test -S {ipc}` before work that would matter on the production host.")
 
 
 def git_guard_line(root: Path, fork: bool) -> str:
