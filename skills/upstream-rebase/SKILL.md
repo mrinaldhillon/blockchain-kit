@@ -12,7 +12,7 @@ since it, and the branch model this operates on are the fork's development
 document, which its docs index (`docs/fork/README.md`) lists; the target's
 facts are its rebase landmines. Read both before step 1.
 
-`mrinal/master` is not touched (operator, 2026-10-14): everything lands on
+`mrinal/master` is not touched: everything lands on
 `mrinal/dev`. The steps below that move `mrinal/master` are the documented
 procedure and run only on the operator's explicit instruction.
 
@@ -29,8 +29,7 @@ until the last step.
    `git fetch https://github.com/bnb-chain/bsc.git tag vNEW --no-tags`
    (and refresh `origin/master`, which tracks upstream).
 2. **Consume the fork's rebase landmines** (its docs index, `docs/fork/README.md`, lists the
-   document; the full inventory is `2026-10-04-rebase-v180-inventory.md` in the review history
-   the index names; `references/landmines.md` points there) — it is written for exactly
+   document; the full inventory behind it is in the review history the index names; `references/landmines.md` points there) — it is written for exactly
    this moment: removed config keys
    that are fatal at startup, removed mechanisms that take fork hooks with them,
    and the deliberately re-semanticized surfaces that must keep the fork's
@@ -126,8 +125,5 @@ run locally; heavy work as a capped unit, `blockchain-kit:fork-development`
 - The production cutover, soak, and PGO recapture are out of scope: the
   fork's cutover runbook owns them (the index lists it).
 - Open work from the run is issues; a durable inventory goes in the fork's
-  review history (as `2026-10-04-rebase-v180-inventory.md` did). No plan or
-  ledger is tracked. Worked example of this whole method (the v1.7.8
-  adoption, a record of the past): `2026-08-16-fork-rebase-v1.7.8.md` in the plan history
-  and `2026-08-16-fork-rebase-v1.7.8-design.md` in the spec history. The fork's docs index,
-  `docs/fork/README.md`, names all three history directories.
+  review history. No plan or ledger is tracked. The fork's docs index, `docs/fork/README.md`,
+  names the history directories, where the last adoption's plan, design and inventory are.

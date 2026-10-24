@@ -22,14 +22,13 @@ anything here.
    `docs/project-context.md` (pb) or bsc-geth's project context (its docs index,
    `docs/fork/README.md`, lists it). An issue about
    Claude itself (steering, this kit, a hook, skill, agent or workflow, the harness, model
-   cost) is filed in `mrinaldhillon/blockchain-kit`, never in the repository you are in
-   (operator, 2026-10-14).
+   cost) is filed in `mrinaldhillon/blockchain-kit`, never in the repository you are in.
 3. **Cut units.** A unit is `{id, brief, packages, skills?}`:
    - The brief is a contract: the files, the interfaces with exact signatures, the invariants
      each test protects, and what is out of scope. Bodies are the implementer's. A brief the
      implementer would have to guess from is not ready.
    - Every brief, in either repository, carries this line verbatim (pb `docs/discipline.md`
-     rule 47, operator ruling 2026-10-19): "Tests: for each test, name the invariant, frozen
+     rule 47): "Tests: for each test, name the invariant, frozen
      value, malformed-input class or real-data golden it protects, and use one table-driven
      test per shape; write no test per brief row, counter or struct field, no argument-parsing
      or label-format test, and no milestone-named file; delete the tests your change makes
@@ -47,7 +46,7 @@ anything here.
 6. **Land in one call**, and nothing after it. Landing needs no confirmation; a production
    deploy (a geth restart, a host install) is a separate decision and is the operator's.
    - prediction-bot: `git push -q && dev-setup/ci/land <PR>`, foreground Bash, timeout 1800000
-     (pb's `BASH_MAX_TIMEOUT_MS`; the longest CI run of the last 60 took 12.1 min, 2026-10-14).
+     (pb's `BASH_MAX_TIMEOUT_MS`).
      `land` waits for the pushed head, runs the lanes the diff selects, squash-merges on green
      and leaves a clean `main` at the merge; the kit's `land-shape` hook holds the call to that
      shape. Exit 0 merged, 1 red, 3 merged with a cleanup left, 4 refused, each said in its
@@ -55,14 +54,14 @@ anything here.
    - bsc-geth: no CI and no `land`. With the class's gate green, squash the branch to its
      feature commits (an `implement` run leaves lane and merge commits; every commit on the
      stack is upstream-rebase cost), then `git push origin mrinal/dev`, behind
-     `.githooks/pre-push`. `mrinal/master` is not touched (operator, 2026-10-14):
+     `.githooks/pre-push`. `mrinal/master` is not touched:
      `.githooks/reference-transaction` holds it.
 
 One unit, or a change too small to brief, skips steps 3 to 5: dispatch
 `blockchain-kit:golang-implementer` once, or make a prose or tooling edit yourself.
 
 When the operator is offline, run the approved plan to completion and batch what only they
-can answer for the end (operator, 2026-09-09).
+can answer for the end.
 
 ## What a change owes
 
@@ -78,7 +77,7 @@ The class is read off the diff and decides the ceremony. The last two rows are b
 | Host | `deploy/production/` | `bash deploy/production/host/tests/run.sh`; `check-config-ext.sh` and `host/geth-preflight.sh` before a `config.toml` or `ExecStart` change | none | none; the install itself is the operator's |
 
 - **One branch per change, whatever it touches.** Code, its docs and its tooling land together.
-- **A prose change never costs a PR** (operator, 2026-10-23). In prediction-bot it rides the next
+- **A prose change never costs a PR.** In prediction-bot it rides the next
   code PR: `main` takes only what `origin/main` holds and requires a PR. In bsc-geth it is pushed
   to `mrinal/dev`. In this kit it is committed and pushed to `main`.
 - **A fact has one home, so a change has one edit.** A fact about the code lives in the
@@ -91,7 +90,7 @@ The class is read off the diff and decides the ceremony. The last two rows are b
   that timeout the harness moves it to the background and notifies on exit, and a background
   start costs one more model request. `build/unit_run.py --wait <slug>` on srv is such a call.
   Never wait with `sleep` or a poll loop.
-- **No mutation testing** (operator, 2026-10-23): no mutation tool, no hand mutant run against
+- **No mutation testing:** no mutation tool, no hand mutant run against
   a suite to prove a test can fail, and no mutant table in a test. It multiplies test runs and
   tokens and stacks tests on tests; a test's worth is argued from what it protects (the brief's
   Tests line), by reading.
@@ -108,8 +107,7 @@ The class is read off the diff and decides the ceremony. The last two rows are b
   implementation and review. The session's tier is written by name, only for a design or
   review stage where a wrong judgment is expensive, and is never inherited by omission. This
   overrides the harness's `workflow-authoring` text ("Default to omitting it — the agent
-  inherits the main-loop model"), which on 2026-10-14 ran four measurement agents and their
-  verifies at Fable. The kit's `workflow-tiers` hook refuses a script that leaves one unset.
+  inherits the main-loop model"). The kit's `workflow-tiers` hook refuses a script that leaves one unset.
 - Judgment stays in the session: the plan, a contract, an invariant, the reading of a red
   gate, the decision to land.
 - A dispatch that edits files gets the tree to itself, or its own worktree. Commit before you
@@ -117,13 +115,13 @@ The class is read off the diff and decides the ceremony. The last two rows are b
 - A critic is terminal: it returns findings and consults no one. A worker with a question
   hands back.
 - On a Fable main loop the advisor is called only to attack an inference you have stated:
-  give your read first and stand on it (operator, 2026-09-17).
+  give your read first and stand on it.
 - The advisor is consulted before a workflow or an execution loop is spawned: the plan it
-  would run is the inference it attacks (operator, 2026-10-19).
+  would run is the inference it attacks.
 
 ## The fork
 
-bsc-geth is developed three ways (operator, 2026-10-14; `blockchain-kit:fork-development`):
+bsc-geth is developed three ways (`blockchain-kit:fork-development`):
 
 - **In its own clone**, a session rooted in bsc-geth: node work, landed by step 6's push.
   `implement` runs in place: worktree lanes beside the clone, package-scoped gates, `make

@@ -7,7 +7,7 @@ description: "Changing bsc-geth itself: the two roots, the pin, the checkout, go
 
 # Developing the fork
 
-bsc-geth is developed three ways (operator, 2026-10-14). Most fork work is node-internal and
+bsc-geth is developed three ways. Most fork work is node-internal and
 runs in a session rooted in a bsc-geth clone; it ends at the push to `mrinal/dev`, and
 prediction-bot stays on its pin (pb ADR 0127: the pin is informational, and pb re-pins only
 when a change alters what it consumes). Fork work can also run from a prediction-bot session,
@@ -77,7 +77,7 @@ deployed node (decision 3).
 5. **Commit and push the fork** (the fork's commit conventions, in its development
    document): with its gate green,
    `git push origin mrinal/dev`, behind `.githooks/pre-push`. No CI runs and no confirmation
-   is needed (operator, 2026-10-14); a production deploy is the operator's.
+   is needed; a production deploy is the operator's.
 6. **pb: move the pin**, for a consumed-API change only (above), with the pushed commit's
    full SHA:
    `go mod edit -replace=github.com/ethereum/go-ethereum=github.com/mrinaldhillon/bsc-geth@<sha>`

@@ -60,7 +60,7 @@ anything here.
   `bsc-fork` exits 2, gopls answers natively, and this source is the reference.
 - **Landing:** the class's gate green (`make audit-ext`; `make lint` before a push; `bash
   deploy/production/host/tests/run.sh` for `deploy/`), then `git push origin mrinal/dev`. No
-  CI, no `land`, no confirmation. `mrinal/master` is not touched (operator, 2026-10-14). A
+  CI, no `land`, no confirmation. `mrinal/master` is not touched. A
   production deploy is the operator's.
 - **Heavy work on srv** (the full suite, lint, `geth-prod`, `go test ./...`) runs capped:
   `python3 build/unit_run.py --name <slug> --mem 16G -- <cmd>`, then `python3

@@ -20,11 +20,10 @@ the repo's own gate commands are not this skill's to state.
   constraints exclude. A grep result presented as a symbol answer is the
   failure the split exists to prevent: say "degraded" when you take it.
 - **The reference-count rule.** A `go_symbol_references` result that reads low
-  is as wrong as an empty one and looks far more credible. Measured on gopls
-  v0.23.0: a query on a fresh workspace returned the declaration alone and
-  missed a cross-package call site, repeatedly inside that server session, and
-  the same recipe then produced the correct answer three times in a row — so the
-  under-report is real and its trigger is not established. Never delete
+  is as wrong as an empty one and looks far more credible: a query on a fresh
+  workspace can return the declaration alone and miss a cross-package call
+  site, and the same query later answer correctly, so the under-report is real
+  and its trigger is not established. Never delete
   "unused" code, and never call a rename complete, on one reference query. The
   authoritative check for call-site completeness is a green `go build ./...`
   plus `go vet ./...`: the compiler sees every call site the build constraints

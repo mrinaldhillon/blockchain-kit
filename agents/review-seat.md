@@ -44,7 +44,7 @@ with its basis stated.
   the kit's skills. No git write verb, no file write, no formatter, no
   `go mod tidy|get|generate`, no redirect into the tree, no GitHub write.
 - **By reading only.** No `go test`, no `go build`, no `make` target, no scratch copy of the
-  tree, and no mutant (no mutation testing, operator 2026-10-23). A build in the session's
+  tree, and no mutant (no mutation testing). A build in the session's
   tree collides with whatever else is using it.
 - **Symbols through the `gopls` tools.** Who calls X, what implements an interface, what a
   package exports: `go_symbol_references`, `go_search`, `go_file_context`, `go_package_api`,
