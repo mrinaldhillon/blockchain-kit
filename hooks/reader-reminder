@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """UserPromptSubmit: put the reference rule next to each operator message, in pb and bsc-geth.
 
-The kit's output style says how a reference the operator reads is written: what it says,
-in words; no coined label and no bare section, item, rule or decision number; the places to
-read more listed at the end of the reply as full `path:line`s they can click open. That text sits at the top of the
+Claude Code's own writing rules already ban made-up names and cap file names per
+paragraph. The kit's output style adds two things they do not say: a repo identifier (a
+decision record, a rule, an issue, a section) is said in words, never as a bare number; and
+the places to read more are listed at the end of the reply as full `path:line`s. That text sits at the top of the
 system prompt, and a prediction-bot session that carried it in every request still wrote
 327 bare labels and no clickable reference in 68 replies (2026-10-20..23; the operator had
 to ask for links). This hook adds the rule, in three lines, beside each message the
@@ -32,11 +33,10 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
 REMINDER = (
-    "blockchain-kit, the reference rule (output style): in what the operator reads, say what each "
-    "reference says in words; no label you coined and no bare §4.4, item N, rule N or ADR N. List the "
-    "places to read more at the end of the reply, each as what it is plus its full path:line (relative "
-    "inside this session's directory, absolute outside it; a section becomes its heading's line, looked "
-    "up after the last edit; never a shortened :406). An issue or PR by its subject and full URL."
+    "blockchain-kit: Claude Code's writing rules apply to anything the operator reads, write-ups "
+    "included. Say a repo identifier (decision record, rule, issue, section) in words, never as a bare "
+    "number. List the places to read more at the end of the reply, each a full path:line (absolute "
+    "outside this session's directory)."
 )
 
 
