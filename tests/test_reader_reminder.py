@@ -68,8 +68,8 @@ class ReaderReminder(unittest.TestCase):
                 self.assertEqual(rc, 0)
                 text = self.context(out)
                 self.assertIn("path:line", text)
-                self.assertIn("No bare §4.4", text)
-                self.assertIn("a label you coined is defined in the same message", text)
+                self.assertIn("no label you coined and no bare §4.4", text)
+                self.assertIn("at the end of the reply", text)
 
     def test_it_is_silent_anywhere_else(self):
         for what, cwd, stdin, env in [
