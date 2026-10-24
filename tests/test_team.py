@@ -87,6 +87,18 @@ class Team(unittest.TestCase):
         again = self.team("init", str(lead), str(self.tmp / "clones/prediction-bot"))
         self.assertEqual(again.returncode, 0, again.stdout + again.stderr)
 
+    def test_init_takes_a_clone_checked_out_under_the_directory_as_it_is(self):
+        lead = self.tmp / "team"
+        inside = lead / "bsc-geth"
+        inside.mkdir(parents=True)
+        subprocess.run(["git", "-C", str(inside), *WHO, "init", "--quiet"], check=True, env=self.env())
+        done = self.team("init", str(lead), str(inside), str(self.tmp / "clones/prediction-bot"))
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("clone  bsc-geth in place", done.stdout)
+        self.assertFalse((lead / "bsc-geth").is_symlink())
+        self.assertTrue((lead / "prediction-bot").is_symlink())
+        self.assertIn("`bsc-geth` (worker session `bsc-geth-worker`)", (lead / "CLAUDE.md").read_text())
+
     def test_init_refuses_a_directory_inside_a_repository(self):
         inside = self.tmp / "clones/prediction-bot/team"
         done = self.team("init", str(inside), str(self.tmp / "clones/bsc-geth"))
