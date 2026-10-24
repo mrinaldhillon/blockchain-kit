@@ -143,6 +143,32 @@ class Kit(unittest.TestCase):
         self.assertIsNone(self.given("geth", BLOCKCHAIN_KIT_CONTEXT="0"))
         self.assertIsNone(self.given("bot", stdin="not json"))
 
+    def test_a_lead_directory_is_given_the_table_and_a_line_per_tree(self):
+        team = self.tmp / "team"
+        team.mkdir()
+        (team / "bot").symlink_to(self.tmp / "bot")
+        (team / "geth").symlink_to(self.tmp / "geth")
+        (team / "notes").symlink_to(self.tmp / "notes")
+        (team / ".hidden").symlink_to(self.tmp / "bot")
+        self.commit("the fork's head")
+        text = self.given("team")
+        assert text is not None
+        self.assertIn("# Using blockchain-kit", text)
+        self.assertIn(f"Lead directory: {team} holds 2 tree(s)", text)
+        self.assertIn(f"Tree: bot — a client, {self.tmp / 'bot'}. Fork pin: github.com/someone/bsc-geth at {PIN}.", text)
+        self.assertIn(f"Tree: geth — the fork, {self.tmp / 'geth'}, on mrinal/dev.", text)
+        self.assertNotIn("Tree: notes", text)
+        self.assertNotIn("Tree: .hidden", text)
+        self.assertNotIn("Git guard:", text)
+        self.assertIn("Host: dev", text)
+        self.assertLess(len(text), 10_000)
+
+    def test_a_directory_without_a_client_or_the_fork_below_it_is_given_nothing(self):
+        plain = self.tmp / "plain"
+        (plain / "docs").mkdir(parents=True)
+        (plain / "notes").symlink_to(self.tmp / "notes")
+        self.assertIsNone(self.given("plain"))
+
     # the kit, host, git-guard and stray-steering lines
 
     def socket_at(self, name: str) -> Path:

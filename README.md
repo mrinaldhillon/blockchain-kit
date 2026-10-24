@@ -46,8 +46,9 @@ read by the main loop and `make replay-parity` when owed.
 | `bin/bk-gate` | `bk-gate [-C DIR] <name> -- <command>`: one verdict line, the last ten lines on red, the command's exit code. On the production host the command runs inside its repository's cap (pb `dev-setup/ci/ci-cap.sh`, bsc-geth `cmd/verifyconstrained`) |
 | `bin/bk-mainloop-share` | what main-loop turns were spent on, by category: the kit's one metric |
 | `bin/bk-statusline` | the status line: the session (model, context, rate limits, cache, cost) and the place (branch, PR, PROD, the fork pin and checkout, the kit's SHA) |
-| `bin/blockchain-kit-context` | the session-start hook, in prediction-bot and in a bsc-geth clone: routing table, pin and checkout lines (prediction-bot only), the kit's SHA, the host, and what is out of place (git guard unarmed, steering files outside the kit) |
+| `bin/blockchain-kit-context` | the session-start hook, in prediction-bot, in a bsc-geth clone and in a lead directory: routing table, pin and checkout lines (prediction-bot only), one line per tree (the lead directory only), the kit's SHA, the host, and what is out of place (git guard unarmed, steering files outside the kit) |
 | `bin/blockchain-kit-setup`, `-update` | install and update, `--scope user\|project` |
+| `bin/bk-team` | `init DIR CLONE...`, `start`, `status`, `stop`: a lead session over one worker session per clone; §Lead and workers |
 | `hooks/guard-secrets` | denies the file tools node identity and account material and the generic secret patterns; fails closed |
 | `hooks/guard-prod-run` | on the production host, denies a bare `replay`, `bot` or collector run that bypasses `scripts/replay-run.sh`, and, in the fork tree, heavy work (`make test\|lint\|geth-prod`, `go test ./...`, `golangci-lint`, `ci.go test\|lint`) not wrapped by `build/unit_run.py`, `systemd-run` or `verifyconstrained`; fails closed |
 | `hooks/land-shape` | runs a `dev-setup/ci/land` call in the foreground at a 30-minute timeout, with no `timeout` wrapper; fails open |
@@ -119,6 +120,36 @@ Kill switches: `BLOCKCHAIN_KIT_CONTEXT=0`, `BLOCKCHAIN_KIT_GOFMT=0`,
 plugin ships is named for the plugin, and the agents are granted `mcp__gopls__<tool>`. The key
 must be exactly `gopls`. In a bsc-geth root gopls answers for the fork natively; from
 prediction-bot it answers for the fork checkout only while `go.work` is active.
+
+## Lead and workers
+
+One session to plan with, which executes nothing, and one working session per clone, briefed
+over cross-session messages. The lead's directory is a plain directory, never a repository
+(the `worktree-create` hook refuses a clone whose parent is inside one), holding a link to
+each clone, a CLAUDE.md that states the lead's role and `.claude/settings.json` enabling the
+kit; `bk-team init` writes all three, so this kit is their versioned home.
+
+```sh
+bk-team init ~/Developer/team ~/Developer/prediction-bot ~/Developer/bsc-geth
+bk-team start ~/Developer/team       # a tmux window per clone: prediction-bot-worker, bsc-geth-worker; then the lead
+```
+
+- The session-start hook in the lead directory prints the routing table and one `Tree:` line
+  per clone (the client's pin, the fork's branch), so the lead holds the kit's skills and both
+  trees' state without executing anything.
+- Workers are ordinary interactive sessions (`claude -n <clone>-worker --model opus
+  --permission-mode bypassPermissions`, Remote Control off so each lists once). Not
+  `claude --bg`: a background session refuses writes into its checkout until it enters a
+  worktree, and its supervisor stops it after about an hour idle.
+- The lead briefs a worker by SendMessage to its name and waits for the report; a brief asks
+  for the report after the result lands, never alongside the action. The receiving session is
+  told the message comes from another session working on the operator's behalf and acts on it
+  within its own permissions.
+- Needs, once: each clone trusted and the kit installed for it (above), and the user's
+  `crossSessionInbound` set to `accept`. With `refuse` a brief is dropped silently; with no
+  value it is held for approval when the two sessions' permission modes differ.
+- In-process agent teams are not this: a teammate has no Workflow tool and gets no
+  session-start context, so it cannot run the kit's workflows.
 
 ## Status line
 
