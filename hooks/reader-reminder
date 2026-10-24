@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """UserPromptSubmit: put the reference rule next to each operator message, in pb and bsc-geth.
 
-The kit's output style says how a reference the operator reads is written: what it says
-first, then a full `path:line` they can click open; no bare section, item, rule or decision
-number; a coined label defined in the same message. That text sits at the top of the
+The kit's output style says how a reference the operator reads is written: what it says,
+in words; no coined label and no bare section, item, rule or decision number; the places to
+read more listed at the end of the reply as full `path:line`s they can click open. That text sits at the top of the
 system prompt, and a prediction-bot session that carried it in every request still wrote
 327 bare labels and no clickable reference in 68 replies (2026-10-20..23; the operator had
 to ask for links). This hook adds the rule, in three lines, beside each message the
@@ -33,10 +33,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
 REMINDER = (
     "blockchain-kit, the reference rule (output style): in what the operator reads, say what each "
-    "reference says, then give it as a full path:line (relative inside this session's directory, "
-    "absolute outside it; a section number becomes its heading's line, looked up after the last edit). "
-    "No bare §4.4, item N, rule N or ADR N, no shortened :406; an issue or PR by its subject and full URL; "
-    "a label you coined is defined in the same message."
+    "reference says in words; no label you coined and no bare §4.4, item N, rule N or ADR N. List the "
+    "places to read more at the end of the reply, each as what it is plus its full path:line (relative "
+    "inside this session's directory, absolute outside it; a section becomes its heading's line, looked "
+    "up after the last edit; never a shortened :406). An issue or PR by its subject and full URL."
 )
 
 
