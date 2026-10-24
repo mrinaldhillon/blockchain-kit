@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# bk-team — a lead session over worker sessions, one per clone.
+#
+# The lead is the session the operator talks to: it plans and briefs, and executes
+# nothing. Each worker is an ordinary interactive session in its own clone, in a tmux
+# window, briefed by the lead over cross-session messages (SendMessage by name). The
+# lead's directory is a plain directory, never a git repository: the kit's worktree
+# hook refuses a clone whose parent is inside a repository. It holds a link to each
+# clone, a CLAUDE.md stating the lead's role, and .claude/settings.json enabling the kit,
+# all written by `init` from this script, so the kit is their versioned home.
+#
+# Usage: bk-team init DIR CLONE...        make DIR; link each CLONE (a path) under it by
+#                                         basename; write CLAUDE.md and settings; record
+#                                         the kit's project install (blockchain-kit-setup)
+#        bk-team start [DIR]              one tmux window per linked clone, named
+#                                         <basename>-worker (opus, bypass permissions,
+#                                         Remote Control off), then the lead, named
+#                                         `lead`, in this terminal with every clone added
+#                                         (--add-dir). Without tmux: prints the commands
+#        bk-team status [DIR]             the worker windows and the sessions claude lists
+#        bk-team stop [DIR]               kill the worker windows; the lead is yours
+#   DIR defaults to the cwd. Workers run `claude` with $BK_TEAM_WORKER_ARGS appended
+#   (default: --model opus --permission-mode bypassPermissions).
+#
+# A worker needs: its clone trusted once (`claude` there, accept the prompt), the kit
+# installed for it (blockchain-kit-setup --scope project), and the user's
+# crossSessionInbound set to accept, else a brief is held or dropped.
+# Exit: 0 ok · 1 a step failed · 2 usage.
+set -euo pipefail
+
+KIT_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+WORKER_SETTINGS='{"remoteControlAtStartup":false}'
+WORKER_ARGS="${BK_TEAM_WORKER_ARGS:---model opus --permission-mode bypassPermissions}"
+
+usage() { sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+die() { echo "bk-team: $*" >&2; exit "${2:-1}"; }
+
+lead_dir() { # [DIR] -> physical path, must exist for every verb but init
+	local d="${1:-.}"
+	[[ -d "$d" ]] || die "$d is not a directory" 2
+	(cd "$d" && pwd -P)
+}
+
+clones() { # DIR -> "name<TAB>realpath" per linked or nested clone
+	local d="$1" p
+	for p in "$d"/*/; do
+		p="${p%/}"
+		[[ -d "$p/.git" || -f "$p/.git" ]] || continue
+		printf '%s\t%s\n' "$(basename "$p")" "$(cd "$p" && pwd -P)"
+	done
+}
+
+write_claude_md() { # DIR
+	local d="$1" names="" name path
+	while IFS=$'\t' read -r name path; do
+		names="${names:+$names, }\`$name\` (worker session \`$name-worker\`)"
+	done < <(clones "$d")
+	cat >"$d/CLAUDE.md" <<MD
+# $(basename "$d"): the lead's directory
+
+The clones below, each the project of its own worker session: $names.
+
+This session is the lead. It plans with the operator and briefs the workers by SendMessage;
+it executes nothing: no edit, no Bash that changes a tree, no Workflow, no commit. A brief
+names the tree, the task and the exact result wanted, and asks for the report after the result
+lands, never alongside the action. Before planning in a tree, read that tree's CLAUDE.md and
+the documents it names. The kit's routing table at session start names the skill per topic.
+
+\`bk-team start\` opens the workers, \`bk-team status\` lists them, \`bk-team stop\` closes them.
+MD
+}
+
+write_settings() { # DIR
+	mkdir -p "$1/.claude"
+	cat >"$1/.claude/settings.json" <<'JSON'
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "enabledPlugins": {
+    "blockchain-kit@blockchain-kit": true
+  },
+  "extraKnownMarketplaces": {
+    "blockchain-kit": {
+      "source": {
+        "source": "github",
+        "repo": "mrinaldhillon/blockchain-kit"
+      }
+    }
+  }
+}
+JSON
+}
+
+cmd_init() {
+	[[ $# -ge 2 ]] || die "init needs DIR and at least one CLONE (see --help)" 2
+	local dir="$1" clone name real
+	shift
+	mkdir -p "$dir"
+	dir="$(cd "$dir" && pwd -P)"
+	if git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		die "$dir is inside a git repository; the lead's directory must not be (the kit's worktree hook refuses a clone whose parent is in a repository)"
+	fi
+	for clone in "$@"; do
+		[[ -d "$clone/.git" || -f "$clone/.git" ]] || die "$clone is not a git clone"
+		real="$(cd "$clone" && pwd -P)"
+		name="$(basename "$real")"
+		if [[ -e "$dir/$name" && ! -L "$dir/$name" ]]; then
+			die "$dir/$name exists and is not a link"
+		fi
+		ln -sfn "$real" "$dir/$name"
+		echo "  link   $name -> $real"
+	done
+	write_claude_md "$dir"
+	write_settings "$dir"
+	echo "  wrote  $dir/CLAUDE.md, $dir/.claude/settings.json"
+	"$KIT_ROOT/bin/blockchain-kit-setup" --scope project --project "$dir"
+}
+
+cmd_start() {
+	local dir name path add=()
+	dir="$(lead_dir "${1:-.}")"
+	[[ -f "$dir/CLAUDE.md" ]] || die "$dir has no CLAUDE.md: run bk-team init first"
+	while IFS=$'\t' read -r name path; do
+		add+=(--add-dir "$path")
+		if command -v tmux >/dev/null; then
+			tmux new-window -d -c "$path" -n "$name-worker" \
+				"claude -n $name-worker $WORKER_ARGS --settings '$WORKER_SETTINGS'"
+			echo "  worker $name-worker in tmux window, $path"
+		else
+			echo "  run in $path:  claude -n $name-worker $WORKER_ARGS --settings '$WORKER_SETTINGS'"
+		fi
+	done < <(clones "$dir")
+	[[ ${#add[@]} -gt 0 ]] || die "$dir holds no clone"
+	echo "  lead   claude -n lead in $dir"
+	cd "$dir" && exec claude -n lead "${add[@]}"
+}
+
+cmd_status() {
+	local dir
+	dir="$(lead_dir "${1:-.}")"
+	if command -v tmux >/dev/null && tmux list-windows -a -F '#{session_name}:#{window_index} #{window_name} #{pane_current_path}' 2>/dev/null | grep -E ' [^ ]+-worker ' ; then :; else echo "  no worker windows"; fi
+	claude agents --json --cwd "$dir" 2>/dev/null | python3 -I -c 'import sys,json
+for a in json.load(sys.stdin): print(" ", a.get("kind"), a.get("name"), a.get("status"), a.get("cwd"))' || true
+}
+
+cmd_stop() {
+	local dir name path w
+	dir="$(lead_dir "${1:-.}")"
+	command -v tmux >/dev/null || die "no tmux: close the worker sessions by hand"
+	while IFS=$'\t' read -r name path; do
+		tmux list-windows -a -F '#{session_name}:#{window_index} #{window_name}' 2>/dev/null |
+			awk -v n="$name-worker" '$2==n{print $1}' | while read -r w; do tmux kill-window -t "$w"; echo "  closed $name-worker"; done
+	done < <(clones "$dir")
+}
+
+case "${1:-}" in
+init) shift; cmd_init "$@" ;;
+start) shift; cmd_start "$@" ;;
+status) shift; cmd_status "$@" ;;
+stop) shift; cmd_stop "$@" ;;
+-h | --help) usage ;;
+*) usage >&2; exit 2 ;;
+esac

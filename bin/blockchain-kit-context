@@ -37,8 +37,14 @@ drops the others or the table. Every git query has a two second timeout, cut sho
 the whole hook stays inside its five second budget, and a line is capped at 400
 characters, so the context stays under 10,000.
 
-Anywhere else it prints nothing, so a session outside the client and the fork pays
-nothing.
+A lead directory (bk-team init): a directory with no go.mod at or above it whose
+immediate children (directories or symlinks to them) include a client or the fork gets
+the same table, then one `Tree:` line per such child (its kind, its real path, the client's
+pin line or the fork's branch), then the kit and host lines. The git-guard and stray lines
+are the trees' own sessions' and are not printed there.
+
+Anywhere else it prints nothing, so a session outside the client, the fork and a lead
+directory pays nothing.
 
 It never fails a session: anything unexpected prints nothing and exits 0.
 
@@ -162,12 +168,64 @@ def body(text: str) -> str:
     return text.strip()
 
 
+LEAD_CHILDREN_MAX = 200
+
+
+def tree_line(name: str, tree: Path, fork: bool) -> str:
+    import forkpin
+
+    if fork:
+        head = git(tree, "rev-parse", "--abbrev-ref", "HEAD")
+        branch = head.stdout.strip() if head is not None and head.returncode == 0 else "?"
+        return f"Tree: {name} — the fork, {tree}, on {branch}."
+    pin = forkpin.summary(tree).splitlines()
+    first = pin[0] if pin else "pin unread"
+    return f"Tree: {name} — a client, {tree}. {first}"
+
+
+def lead_context(cwd: Path) -> str:
+    """A lead directory: no module at or above it, a client or the fork among its children."""
+    import forkpin
+
+    trees = []
+    try:
+        children = sorted(cwd.iterdir())[:LEAD_CHILDREN_MAX]
+    except OSError:
+        return ""
+    for child in children:
+        if child.name.startswith("."):
+            continue
+        tree = child.resolve()
+        if not (tree / "go.mod").is_file():
+            continue
+        fork = forkpin.is_fork(tree)
+        if fork or forkpin.is_client(tree):
+            trees.append((child.name, tree, fork))
+    if not trees:
+        return ""
+    lines = [f"Lead directory: {cwd} holds {len(trees)} tree(s); each is its own session's project."]
+    for name, tree, fork in trees:
+        try:
+            lines.append(tree_line(name, tree, fork))
+        except Exception:  # noqa: BLE001, S112 - one tree that fails never drops the others
+            lines.append(f"Tree: {name} — {tree} (unread).")
+    for make in (kit_line, lambda: host_line(False)):
+        try:
+            line = make()
+        except Exception:  # noqa: BLE001, S112
+            continue
+        if line:
+            lines.append(line)
+    text = body(TABLE.read_text(encoding="utf-8"))
+    return text + "\n\n" + "\n".join(line if len(line) <= LINE_MAX else line[: LINE_MAX - 1] + "…" for line in lines)
+
+
 def context(cwd: Path) -> str:
     import forkpin  # here, inside main's try: a broken lib must not fail the session
 
     root = forkpin.module_root(cwd)
     if root is None:
-        return ""
+        return lead_context(cwd)
     fork = forkpin.is_fork(root)
     if not fork and not forkpin.is_client(root):
         return ""
