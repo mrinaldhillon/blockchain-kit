@@ -242,7 +242,8 @@ const ANGLES = {
   domain: fork
     ? `**The fork's rules.** The Ext convention (\`blockchain-kit:fork-ext-convention\`): every fork-added durable ` +
       `surface ends in \`Ext\` and lives in a \`*_ext.go\` file, and upstream provenance is settled by \`git show ` +
-      `v1.7.8:<path>\`, never by the suffix. Rebase cost: an edit that deletes or restructures upstream lines, or ` +
+      `<upstream-tag>:<path>\`, never by the suffix, where <upstream-tag> is the tag the fork's development document ` +
+      `(through ${forkIndex}) names as its base. Rebase cost: an edit that deletes or restructures upstream lines, or ` +
       `touches a declaration the landmines document names (${forkIndex} lists it), is a candidate.`
     : `**The project's invariants.** Read each rule's home before judging it. Determinism and replay parity ` +
       `(\`internal/{replay,trigger,strategy,state}\` and what they call; \`docs/discipline.md\` rules 6, 12, 14, 15, ` +

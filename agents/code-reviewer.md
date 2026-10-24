@@ -87,8 +87,9 @@ not apply. Two take their place:
 
 - **The `Ext` convention** (`blockchain-kit:fork-ext-convention`, which the brief has you
   load): every fork-added durable surface ends in `Ext` and lives in a `*_ext.go` file.
-  Upstream provenance is settled by `git show v1.7.8:<path>` (from prediction-bot,
-  `git -C <fork> show …`), never by the suffix.
+  Upstream provenance is settled by `git show <upstream-tag>:<path>` (from prediction-bot,
+  `git -C <fork> show …`), never by the suffix; `<upstream-tag>` is the tag the fork's
+  docs index names as its base (the development document's upstream line).
 - **Rebase cost and landmines**, whose home is the fork's rebase-landmines document (its docs
   index, `docs/fork/README.md` under the fork tree the brief names, lists it): an edit that
   deletes or restructures upstream lines, or touches a declaration that document names, is a
