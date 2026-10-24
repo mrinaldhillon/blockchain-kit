@@ -3,65 +3,44 @@ name: fork-deploy
 description: "The fork's deploy/production tree: config.toml, the geth unit, the host manifests."
 ---
 
-**When to load:** Use before changing anything under deploy/production/ in the bsc-geth fork checkout, or anything that affects the node's config.toml, its systemd unit's ExecStart, the host bundle's MANIFEST, or which repo installs a path on the production host. Covers the offline gate, the two config checkers, one-writer-per-path across the fork's and the bot's manifests, and the keys and flags never to set.
+**When to load:** Use before changing anything under deploy/production/ in the bsc-geth fork checkout, or anything that affects the node's config.toml, its systemd unit's ExecStart, the host bundle's MANIFEST, or which repo installs a path on the production host. Covers the rules for the offline gate, the two config checkers, one writer per path across the fork's and the bot's manifests, and the never-set list; the facts behind each are the fork's deploy docs.
 
 # The fork's production deploy bundle
 
-**The fork owns the production host.** The installed OS+geth bundle for the Ryzen 9 5950X
-latency host — systemd units, slices and cpuset drop-ins, `config.toml`, sysctl, limits, NIC IRQ
-steering, CPU/cache pinning — lives in the checkout at `deploy/production/host/` (`MANIFEST`
-declares every installed row, `install.sh` is the only writer, `verify.sh` is the read-only
-drift checker). prediction-bot keeps only bot-specific infra in its own manifest; **one
-writer per path** across the two manifests, the bot's rows installed first, then the fork's, then
-exactly one `daemon-reload`.
-
-The rest of `deploy/production/` is the fork-side contract and tooling: `check-config-ext.sh`
-(is a `config.toml`/`geth.service` pairing correct for this fork version?),
-`host/geth-preflight.sh` (does it load?), the snapshot tooling (`snapshot/`), the peer tooling
-(`peers/`; seeding is deliberately not part of bring-up), PGO capture (`cmd/pgocapture`), and
-the redeploy diagnostics.
-
-Every number and its derivation (cache split, `GOMEMLIMIT`, history flags, CPU partition, the
-things never to do on this node) is in `deploy/production/README.md`; do not restate them.
+**The fork owns the production host.** Its bundle is `deploy/production/` in the fork tree,
+documented beside it. The fork's docs index (`docs/fork/README.md`, its "Elsewhere in the tree"
+list) names those documents: the reasoning behind every installed number and the things never
+to do on the node, the host bundle (manifest, installer, verifier, offline tests), the two
+runbooks, and the post-deploy soak with the health gate. Read the facts there: the host, the
+files, the checks and their numbers change with the fork, and this skill holds only the rules.
+prediction-bot keeps only bot-specific infra, in its own manifest.
 
 ## Before changing anything there
 
 Paths are in the fork tree. In a bsc-geth root run them as written; from prediction-bot,
 `bash "$BSC_FORK_PATH"/deploy/production/…`.
 
-- **The offline gate is `bash deploy/production/host/tests/run.sh`** — shellcheck,
-  fixture-sync, run.sh (banners), the both-manifests lint, verify.sh, install.sh,
-  fixture-sync (--check/--apply), geth-preflight.sh, nic-{tune,steer}-lt.sh,
-  check-config-ext.sh. No CI runs on the working branch pair; this is
-  the only evidence. After editing anything under `host/srv/`, run
-  `host/tests/fixture-sync.sh --apply` first. The host-test fixtures: `verify/ok` is the one
-  full tree; every other case is an overlay under `verify-overlay/<case>/` with a `DELETE` list.
-- Anything affecting `config.toml` semantics or the unit's `ExecStart` must keep
-  **both** `deploy/production/check-config-ext.sh` (is it correct?) and
-  `deploy/production/host/geth-preflight.sh` (does it load?) passing; neither implies
-  the other. Update the checker's rules in the same PR as the change they gate.
-- **One writer per path.** No installed path may appear in both the fork's
-  `host/MANIFEST` and the bot's. `host/tests/manifests_test.sh` asserts the
-  fork's half offline against `pb-manifest-paths.txt` (no dependency on the bot's repo). The
-  bot's half has no commit-time check; a live two-writer violation reddens `verify.sh`
-  assertion 13 (sha256) host-side. Changing the split is a paired change: the fork's
-  manifest, the bot's manifest and `pb-manifest-paths.txt`, in one loop
-  (`blockchain-kit:fork-development`).
-- **Caches are CLI-authoritative**: the four cache keys are absent from
-  `config.toml` and `--cache`/`--cache.*` on `ExecStart` are the authority
-  (`SetEthConfig` overwrites the TOML values when the flags are set). Never
-  re-add the keys. `GOMEMLIMIT` is derived from the split — change one,
-  re-derive the other (README §memory).
-- Never re-add TOML keys upstream removed without deprecation
-  (`EnableOpcodeOptimizing` hard-fails geth startup). Never set `--pruneancient`.
-  `--history.blocks` is irreversible.
+- **Run the offline gate** the host bundle's README names, with any fixture step it puts
+  first. No CI runs on the working branch pair; this is the only evidence.
+- **Keep both config checkers passing.** Anything affecting `config.toml` semantics or the
+  unit's `ExecStart` must keep both of the fork's checkers green: the one that says the
+  pairing is correct for this fork version and the one that says geth loads it. Neither
+  implies the other. Update a checker's rules in the same change as what they gate.
+- **One writer per path.** No installed path may appear in both the fork's manifest and the
+  bot's. Changing the split is a paired change (the fork's manifest, the bot's manifest and
+  the fork's contracted list of bot paths) in one loop (`blockchain-kit:fork-development`).
+  What asserts it, offline and on the host, and the install order across the two manifests
+  are the host bundle's README.
+- **The never list.** The deploy README names the keys and flags never to set or re-add on
+  this node, and the irreversible one; read it before any `config.toml` or `ExecStart`
+  change, and the rebase landmines before re-adding anything upstream removed.
 - A new `*Ext` TOML key or flag is a fork surface (`blockchain-kit:fork-ext-convention`)
-  and a row in `check-config-ext.sh`, in the same change.
+  and a row in the correctness checker, in the same change.
 
 ## Runbooks
 
-Rebuilding a wiped host is `deploy/production/CUTOVER_RUNBOOK.md`; redeploying a new
-binary and pairing onto the running host, with prediction-bot's side sequenced in, is
-`deploy/production/REDEPLOY_RUNBOOK.md`. Both are numbered steps with a pass condition each:
-run in order, stop on a failed check. Running either against the live host is the
-user's: an agent prepares and verifies offline, and never touches the live service.
+Rebuilding a wiped host and redeploying a new binary onto the running host, with
+prediction-bot's side sequenced in, are the fork's two runbooks, which the index lists. Both
+are numbered steps with a pass condition each: run in order, stop on a failed check. Running
+either against the live host is the user's: an agent prepares and verifies offline, and never
+touches the live service.

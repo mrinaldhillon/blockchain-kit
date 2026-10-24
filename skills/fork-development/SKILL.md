@@ -3,7 +3,7 @@ name: fork-development
 description: "Changing bsc-geth itself: the two roots, the pin, the checkout, go.work, the edit-to-pin loop."
 ---
 
-**When to load:** Use when changing the bsc-geth fork itself — most often in a session rooted in a bsc-geth clone, or from a prediction-bot session through BSC_FORK_PATH when a bot change needs a fork change — editing, building, testing, committing or pushing fork code, moving the go.mod fork pin (only for a change to what pb consumes, pb ADR 0127), or deciding whether a change belongs in the fork or in the bot. Covers the two roots, the three trees (pin, checkout, go.work), the edit-to-pin loop, the fork's commands, branches, architecture and commit conventions.
+**When to load:** Use when changing the bsc-geth fork itself — most often in a session rooted in a bsc-geth clone, or from a prediction-bot session through BSC_FORK_PATH when a bot change needs a fork change — editing, building, testing, committing or pushing fork code, moving the go.mod fork pin (only for a change to what pb consumes, pb ADR 0127), or deciding whether a change belongs in the fork or in the bot. Covers the two roots, the three trees (pin, checkout, go.work), the edit-to-pin loop, where a change belongs, the rules for heavy work and formatting, and where the fork's own facts live (its docs, not this skill).
 
 # Developing the fork
 
@@ -15,9 +15,14 @@ in the clone `BSC_FORK_PATH` names; and a bot change that needs a fork change is
 one pb session: the fork first, then the pin move, then the bot. One clone per open session: a
 pb session's `BSC_FORK_PATH` never names a clone another session has open.
 
-The fork's `CLAUDE.md` holds its facts: a bsc-rooted session loads it, a pb session does not.
-Its steering is the kit's. Anything else tracked under its `.claude/` is stray (the
-session-start line names it) and is not the rule. The fork's steering is this skill and these:
+The fork's docs are the home of the fork's facts; their index is `docs/fork/README.md`. What
+the fork is, its upstream line and branches, its commands and CI gate, its architecture, commit
+conventions and tools are the fork's development document, which the index lists: read them
+there, in the tree you are changing, never from memory or from the kit. A bsc-rooted session
+also loads the fork's `CLAUDE.md` (its identity, its own rules and pointers); a pb session does
+not, and reads the index in the checkout. Claude steering for the fork is the kit's: anything
+else tracked under its `.claude/` is stray (the session-start line names it) and is not the
+rule. The fork's steering is this skill and these:
 
 | Load | When |
 |---|---|
@@ -69,7 +74,8 @@ deployed node (decision 3).
    `go vet ./<pkg>/…`, the package's tests, then `make audit-ext`; `make lint` before a push.
 4. **pb: edit the bot** against the changed fork. Its gates run as usual; with `go.work`
    active they prove the pair, not what CI will build.
-5. **Commit and push the fork** (conventions below): with its gate green,
+5. **Commit and push the fork** (the fork's commit conventions, in its development
+   document): with its gate green,
    `git push origin mrinal/dev`, behind `.githooks/pre-push`. No CI runs and no confirmation
    is needed (operator, 2026-10-14); a production deploy is the operator's.
 6. **pb: move the pin**, for a consumed-API change only (above), with the pushed commit's
@@ -95,110 +101,39 @@ sizing or parsing of a served value goes in the bot. A new fork surface is a con
 it is named under the `Ext` convention, specified among the fork's shipped contracts, and the
 bot reads it through `internal/nodeapi` (`blockchain-kit:fork-node-api`).
 
-## What the fork is
-
-A **fork of `bnb-chain/bsc`** (itself a go-ethereum fork). The Go module path is still
-`github.com/ethereum/go-ethereum`, base version **BSC v1.7.8** (`version/version.go`), Go **1.27.1**.
-The base is exactly upstream's `v1.7.8` tag, the newest *stable* upstream release; upstream master
-has since moved on to `v1.8.0-alpha`, which this fork deliberately does not track yet.
-
-The fork's purpose is a **latency-critical BSC "fast node" that feeds co-located trading bots**.
-Almost all local value-add is low-latency transaction submission/propagation, peer curation, and
-the OS/systemd tuning to run it. Upstream geth/BSC subsystems are otherwise intact.
-
-Submitters are **always local and trusted** — the IPC unix socket or loopback websocket, possibly
-several bots. There is no untrusted RPC path and none is planned. Several design decisions rest on
-this (e.g. the fast path broadcasts before signature recovery); revisit them if it ever changes.
-
-**Branches.** `origin/master` tracks upstream bnb-chain/bsc and carries no fork work.
-`mrinal/master` is the fork's master, always rebased from it. **`mrinal/dev` is the working
-branch** and the GitHub default; everything lands on it by a push, and prediction-bot pins it.
-`mrinal/master` is not touched (operator, 2026-10-14: `mrinal/dev` needs much work before a
-merge there); `.githooks/reference-transaction` holds it, and the upstream-rebase steps that
-move it run only on the operator's explicit instruction. History is kept linear and
-feature-level (one commit per feature) so the base stays cheap to re-rebase onto new upstream
-tags: every commit riding on the fork stack is upstream-rebase cost. CI workflows trigger only
-on `master`/`develop`, so **no CI runs on the `mrinal/dev` → `mrinal/master` pair** — the local
-gate is the only evidence.
-
 ## Commands
 
-Build/test go through `build/ci.go` (a Go wrapper that sets build tags and flags) — prefer the
-Makefile targets over raw `go build`:
+The fork's targets, what each runs, the CI gate and the toolchain are the fork's development
+document (its §Commands). The kit's rules on top of them:
 
-- `make geth` — build → `build/bin/geth`
-- `make geth-prod` — production build: `GOAMD64=v3`, `-march=znver3`, `-z noexecstack`, PGO
-  auto-applied iff `cmd/geth/default.pgo` exists (it currently does **not** — capture one first;
-  see `deploy/production/README.md`). Host-specific (Zen 3); build on the CPU class you deploy on.
-- `make tools-prod` — stages the fork tools (`adminpeers`, `feedsoak`, `pgocapture`, `metricsnap`)
-  into `FORK_TOOLS_DIR` (`host.env`; the timer units' `ExecStart` resolve there); refuses a dirty tree.
-- `make test` — full suite (`go run build/ci.go test -timeout 1h`)
-- `make lint` — golangci-lint via `build/ci.go` (config: `.golangci.yml`, v2, `default: none` +
-  an explicit allowlist), **then `make audit-ext` and `make modzip-check`**. Needs
-  `CGO_CFLAGS="-O -D__BLST_PORTABLE__"` + `CGO_CFLAGS_ALLOW` on hosts where blst won't build
-  natively (CI sets this).
-- `make audit-ext` (fork-local) — `go run ./build/auditext`: the Ext naming/placement/wiring sweep
-  of the **working tree** against the upstream merge-base (uncommitted work included); exit 1 on any
-  fail-severity finding, 2 if the base won't resolve. `make audit-ext-test` runs its own tests.
-- `make fmt` — `gofmt -s -w`. **Never run it on the fork tree**: upstream's files are
-  gofmt-clean but not simplify-clean, and `-s` rewrites upstream lines that then conflict
-  at the next rebase. The kit's edit hook formats the one file just written, without `-s`.
-- **Heavy local work on srv** — the full suite, lint, `geth-prod`, or `go test` over the whole
-  module, *however it is launched* (`make`, `ci.go`, `golangci-lint`, a script, `bash -c`,
-  `xargs`, a `$(go list ./...)` package list) — runs as a capped systemd unit, outside the
-  Claude process tree, with the fork's own runner, started in the fork tree:
-  `python3 build/unit_run.py --name <slug> --mem 16G -- <cmd>`, then
-  `python3 build/unit_run.py --wait <slug>` as foreground Bash at timeout 1800000 (verdict +
-  log tail; re-run it if killed). Or `cmd/verifyconstrained`. Linux with a systemd user
-  manager only. The kit's `guard-prod-run` hook refuses an uncapped run on the prod host.
+- Prefer the fork's Makefile targets over a raw `go build`; a single package or a single test
+  needs only the standard toolchain.
+- **Never run `make fmt` on the fork tree.** It is upstream's `gofmt -s -w` over every file:
+  upstream's files are gofmt-clean but not simplify-clean, and `-s` rewrites upstream lines
+  that then conflict at the next rebase. The kit's edit hook formats the one file just
+  written, without `-s`.
+- **Heavy work runs capped.** The full suite, lint, the production build, or `go test` over
+  the whole module, *however it is launched* (`make`, `ci.go`, `golangci-lint`, a script,
+  `bash -c`, `xargs`, a `$(go list ./...)` package list), runs under the fork's own runner,
+  started in the fork tree (`build/unit_run.py`, the wrapper the kit's `guard-prod-run` hook
+  accepts; its flags and the cloud-session fallback are the development document's), and its
+  wait runs as foreground Bash at timeout 1800000. The hook refuses an uncapped run on the prod
+  host; decide by what runs, not by whether the hook would deny it, since it cannot see inside
+  a script file.
+- Validate with default toolchain behaviour and set no `GOEXPERIMENT` unless the user asks.
 
-Single package / single test (standard toolchain is fine — no ci.go needed):
-- `go test ./eth/...` · `go test ./eth -run TestPeerCuration -v`
-- `go vet ./eth/...`
+## Commits
 
-**CI gate** (upstream's, on `master`/`develop` only): `build-test` runs `go run build/ci.go
-check_generate` (go generate + `go mod tidy` produce no diff) and `check_baddeps`, then
-`make geth`; `unit-test` runs `make test`; `lint` runs `go mod tidy` + `make lint`.
-
-**Toolchain policy**: validate with default toolchain behavior and set no
-`GOEXPERIMENT` unless the user explicitly asks; a non-default experiment run is a labeled
-diagnostic.
-
-## Architecture (big picture)
-
-Standard geth layout — only the non-obvious wiring matters here:
-
-- `cmd/geth` — entrypoint; flags registered in `cmd/utils/flags.go`.
-- `eth/` — the full node backend (`backend.go`), the p2p protocol handler (`handler.go`), and the
-  JSON-RPC surface (`api.go`, `api_admin.go`). **This is where nearly all fork wiring lives** — the
-  `_ext.go` files hang off these. `eth/ethconfig/config.go` (+ generated `gen_config.go`) defines
-  the config struct that TOML binds to, including the `*Ext` keys.
-- `consensus/` — **Parlia** is BSC's PoSA engine (21 validators, fast-finality votes); this and the
-  system contracts are the main divergence from vanilla geth. See `docs/parlia/`.
-- `core/` — blockchain, EVM, `core/txpool/legacypool` (fork edits present here too — check for `Ext`).
-- `ethdb` / `triedb` / `trie` — pebble-backed state; large trie/snapshot caches are **off the Go
-  heap** (fastcache anon mmap / pebble block cache), which drives the memory sizing in the deploy docs.
-- `p2p` — **not stock**: peer budget, curator cooldown, tracked peer sets and one-shot dialing live
-  in `p2p/server_ext.go`, `p2p/peer_ext.go`, `p2p/dial_ext.go`. `node/api_ext.go`,
-  `internal/debug/api_ext.go` and `log/handler_glog_ext.go` also carry fork code.
-- `miner`, `rpc` — standard geth.
-
-## Commit conventions
-
-- Fork-local commits on `mrinal/dev` use **conventional commits**: `type(scope): subject`
-  (e.g. `deploy(prod): …`, `docs(deploy): …`, `fix(deploy): …`, `build: …`).
-- The upstream `commit-lint` CI (`docs/lint/commit.md`: `scope: subject`, ≤72-char head, no
-  `R4R`/`WIP`) only runs on `master`/`develop`, so it does not gate this branch — but keep new
-  scopes short and lowercase.
-- A fork commit and the bot commit that pins it are two commits in two repos. The bot's
-  message names the fork SHA it moves the pin to.
+The fork's commit conventions are its development document's. The kit's rule across the two
+repos: a fork commit and the bot commit that pins it are two commits in two repos, and the
+bot's message names the fork SHA it moves the pin to.
 
 ## Map of the fork's docs
 
 The fork keeps its own map: `docs/fork/README.md`, one line per document under `docs/fork/`
 (rules and state, contracts, decisions, history) and the documents elsewhere in its tree
 (`deploy/production/`, each `cmd/<tool>/README.md`). Read it there; the kit names a fork
-document by what it is and carries this one path. Two to read before acting: the project
-context (milestone state, settled rulings, facts expensive to re-derive) before re-opening a
-design question or re-running an investigation, and the feature inventory before changing a
-feature.
+document by what it is and carries this one path. Three to read before acting: the
+development document before building, gating or landing a change; the project context
+(milestone state, settled rulings, facts expensive to re-derive) before re-opening a design
+question or re-running an investigation; and the feature inventory before changing a feature.

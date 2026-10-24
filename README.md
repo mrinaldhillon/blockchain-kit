@@ -236,9 +236,9 @@ each start: `make dev-setup`, so the reference-transaction guard holds `master` 
 `mrinal/master` there as on a dev box and the pre-push ratchet is live; the fetched linter
 archive verified against `build/checksums.txt` and unpacked into `build/cache/`, where the
 ratchet and `make lint` look; then one `Cloud session:` line with what it measured: Go,
-CPUs, memory, whether a systemd user manager answers, the guard and the linter. CLAUDE.md
-§Commands carries the clause the line points at: no systemd user manager, so
-`build/unit_run.py` cannot run and heavy work goes in the foreground.
+CPUs, memory, whether a systemd user manager answers, the guard and the linter. The fork's
+development document (its docs index lists it) carries the clause the line points at: no
+systemd user manager, so `build/unit_run.py` cannot run and heavy work goes in the foreground.
 
 **The kit reaches the VM through the setup script, and only that way.** A cloud session
 installs no plugin from a repository's `enabledPlugins` or `extraKnownMarketplaces` (Claude
