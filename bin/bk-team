@@ -10,8 +10,10 @@
 # all written by `init` from this script, so the kit is their versioned home.
 #
 # Usage: bk-team init DIR CLONE...        make DIR; link each CLONE (a path) under it by
-#                                         basename; write CLAUDE.md and settings; record
-#                                         the kit's project install (blockchain-kit-setup)
+#                                         basename, or take it as it is when it is already
+#                                         checked out under DIR; write CLAUDE.md and
+#                                         settings; record the kit's project install
+#                                         (blockchain-kit-setup)
 #        bk-team start [DIR]              one tmux window per linked clone, named
 #                                         <basename>-worker (opus, bypass permissions,
 #                                         Remote Control off), then the lead, named
@@ -103,11 +105,14 @@ cmd_init() {
 		[[ -d "$clone/.git" || -f "$clone/.git" ]] || die "$clone is not a git clone"
 		real="$(cd "$clone" && pwd -P)"
 		name="$(basename "$real")"
-		if [[ -e "$dir/$name" && ! -L "$dir/$name" ]]; then
-			die "$dir/$name exists and is not a link"
+		if [[ "$real" == "$dir/$name" ]]; then
+			echo "  clone  $name in place"
+		elif [[ -e "$dir/$name" && ! -L "$dir/$name" ]]; then
+			die "$dir/$name exists and is not a link to $real"
+		else
+			ln -sfn "$real" "$dir/$name"
+			echo "  link   $name -> $real"
 		fi
-		ln -sfn "$real" "$dir/$name"
-		echo "  link   $name -> $real"
 	done
 	write_claude_md "$dir"
 	write_settings "$dir"
