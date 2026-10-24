@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+"""UserPromptSubmit: put the reference rule next to each operator message, in pb and bsc-geth.
+
+The kit's output style says how a reference the operator reads is written: what it says
+first, then a full `path:line` they can click open; no bare section, item, rule or decision
+number; a coined label defined in the same message. That text sits at the top of the
+system prompt, and a prediction-bot session that carried it in every request still wrote
+327 bare labels and no clickable reference in 68 replies (2026-10-20..23; the operator had
+to ask for links). This hook adds the rule, in three lines, beside each message the
+operator sends, where the reply is written.
+
+It acts where the session-start hook does: a project whose go.mod replaces go-ethereum
+with the fork (prediction-bot), or the fork itself (module github.com/ethereum/go-ethereum).
+The project is CLAUDE_PROJECT_DIR, else the payload's cwd. Anywhere else it prints nothing.
+
+Not a guard: it fails open. Its own bug, or an unreadable payload, prints nothing and
+exits 0; the cost of a missing reminder is a reply the operator asks to have rewritten.
+
+Env:   BLOCKCHAIN_KIT_READER_REMINDER=0 turns it off.
+Usage: fed the UserPromptSubmit JSON payload on stdin by hooks/hooks.json.
+Exit:  0 always.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+
+REMINDER = (
+    "blockchain-kit, the reference rule (output style): in what the operator reads, say what each "
+    "reference says, then give it as a full path:line (relative inside this session's directory, "
+    "absolute outside it; a section number becomes its heading's line, looked up after the last edit). "
+    "No bare §4.4, item N, rule N or ADR N, no shortened :406; an issue or PR by its subject and full URL; "
+    "a label you coined is defined in the same message."
+)
+
+
+def applies(cwd: Path) -> bool:
+    import forkpin
+
+    root = forkpin.module_root(cwd)
+    return root is not None and (forkpin.is_fork(root) or forkpin.is_client(root))
+
+
+def main() -> int:
+    if os.environ.get("BLOCKCHAIN_KIT_READER_REMINDER") == "0" or sys.stdin.isatty():
+        return 0
+    body = json.load(sys.stdin)
+    if not isinstance(body, dict):
+        return 0
+    named = os.environ.get("CLAUDE_PROJECT_DIR") or body.get("cwd") or os.getcwd()
+    if not applies(Path(str(named))):
+        return 0
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": REMINDER}}))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception:  # noqa: BLE001 - a reminder must never fail the operator's message
+        sys.exit(0)
