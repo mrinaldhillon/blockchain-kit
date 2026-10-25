@@ -67,6 +67,8 @@ it executes nothing: no edit, no Bash that changes a tree, no Workflow, no commi
 names the tree, the task and the exact result wanted, and asks for the report after the result
 lands, never alongside the action. Before planning in a tree, read that tree's CLAUDE.md and
 the documents it names. The kit's routing table at session start names the skill per topic.
+A plan that will be implemented ends with its \`## Units\` and \`## Not implement\` sections
+(\`blockchain-kit:working-here\`); a brief to a worker carries a run's units as written.
 
 \`bk-team start\` opens the workers, \`bk-team status\` lists them, \`bk-team stop\` closes them.
 MD

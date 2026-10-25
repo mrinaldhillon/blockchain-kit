@@ -13,9 +13,11 @@ is the header of `workflows/implement.js`; the process around it is `blockchain-
 
 1. **The units.** Each is `{id, brief, packages, skills?}`. The brief is the contract: the
    files, the interfaces with exact signatures, the invariants each test protects, and the
-   Tests line every brief carries (`blockchain-kit:working-here`, step 3). If the conversation does not already hold units in that shape, write them now
-   and show them before launching. Two units never share a package: split differently, or run
-   them as two runs.
+   Tests line every brief carries (`blockchain-kit:working-here`, step 3). When the plan ends
+   with a `## Units` section, the run being launched is passed as written, its base and gate
+   included; a unit that no longer fits goes back to the plan first. Without one, write the
+   units now and show them before launching. Two units never share a package: split
+   differently, or run them as two runs.
 2. **Preconditions**, one Bash call each; stop and say which failed:
    - `git branch --show-current` is the run branch: in prediction-bot not `main`; in bsc-geth
      `mrinal/dev` or a branch cut from it, never `master` or `mrinal/master`.
