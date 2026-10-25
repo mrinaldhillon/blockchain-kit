@@ -37,7 +37,7 @@ read by the main loop and `make replay-parity` when owed.
 | `skills/` (fork) | `fork-development`, `fork-ext-convention`, `fork-deploy`, `campaign`, `upstream-rebase` |
 | `agents/` | `golang-implementer`, `code-reviewer`, `review-seat`, `determinism-auditor`, `parity-auditor`, `fork-indexer`, `fixture-capturer`, `infra-profiler`. None runs above opus, except the review workflow's intent and conformance seats (fable, operator 2026-10-23) |
 | `workflows/implement.js` | `blockchain-kit:implement`: Lane → Integrate → Gate → Review → Fix → Re-gate. Its header is the contract of its `args` and its return |
-| `commands/implement.md` | `/blockchain-kit:implement`, the user's entry to the workflow |
+| `commands/implement.md` | `/blockchain-kit:implement`, the entry to the workflow: the user's command, or the session's on the user's approval of a plan's units |
 | `workflows/review.js` | `blockchain-kit:review`: Intent → Find → Check. The contract and its soundness first (fable), then a conformance finder (fable) and two to five more by angle (opus), then one checker per changed file with a verdict per candidate (opus); pauses after Intent when the contract is in doubt; read-only. Its header is the contract of its `args` and its return |
 | `commands/review.md` | `/blockchain-kit:review [<pr#>\|<base>]`, the user's entry to the review workflow |
 | `commands/init.md` | `/blockchain-kit:init`, once per project; reports, changes nothing |
@@ -305,8 +305,7 @@ Cloud sessions, "Send local repositories without GitHub"). `gh pr` and `gh issue
 cloud session (GraphQL is refused); `gh api repos/...` works.
 
 **What the setup script places beyond Go.** gopls, the golangci-lint archive for `make lint`,
-the module cache, `shellcheck` (so `deploy/production/host/tests/run.sh` runs its shellcheck
-suite instead of SKIPping it) and `benchstat` (pinned to an x/perf version in the script; the before/after perf gate of the fork's hygiene
+the module cache, `shellcheck` (for the fork's shell scripts) and `benchstat` (pinned to an x/perf version in the script; the before/after perf gate of the fork's hygiene
 refactor, `2026-10-16-fork-hygiene-refactor.md` in bsc-geth's plan history). Each step
 is tolerated absent, capped so the five-minute cache window holds, and named in the setup
 output, which ends with whether shellcheck and benchstat landed; `go generate` needs nothing extra, since

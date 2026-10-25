@@ -25,7 +25,7 @@ description: "Endpoints, IPC or WebSocket, PB_ENV, the SOCKS5 proxy, tests that 
 | Binance credential and egress | `docs/specs/recorder-binance.md` §3.1 |
 | Secrets | `docs/operations.md` §13 |
 | Offline test contract | `docs/specs/fixtures.md` §Invariants |
-| `PB_ENV` pins in the bot and collector units | `deploy/host/README.md`; `deploy/host/srv/etc/systemd/system/` |
+| `PB_ENV` pins in the bot and collector units | the infra repo's `README.md` §The bot and collector units; its `host/srv/etc/systemd/system/` |
 
 **Commands that answer questions**
 - `make test-offline` (Makefile) — the suite must pass with geth and Binance down.

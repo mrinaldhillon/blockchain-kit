@@ -1,14 +1,14 @@
 ---
 description: Run briefed Go units through the blockchain-kit implement workflow — parallel worktree lanes, one merged run branch, the gate, one review, one fix round.
 argument-hint: "[what to implement, or nothing when the units are already in the conversation]"
-disable-model-invocation: true
 ---
 
 # Run `blockchain-kit:implement`
 
 Arguments: `$ARGUMENTS`
 
-This command is the user's request to run the workflow. The contract of its input and output
+Run it when the user asks for implementation: this command typed, or an approval of a plan
+whose `## Units` it launches, which is the request for each run in order. The contract of its input and output
 is the header of `workflows/implement.js`; the process around it is `blockchain-kit:working-here`.
 
 1. **The units.** Each is `{id, brief, packages, skills?}`. The brief is the contract: the
