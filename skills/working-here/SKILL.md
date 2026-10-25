@@ -16,14 +16,23 @@ anything here.
 
 1. **Explore and plan in the session.** Read the code and the `docs/` that own the topic. The
    plan is the list of units; it lives in the conversation and, when it outlives the session,
-   in an issue. No plan, spec, ledger or resume file is tracked in either repository.
+   in an issue. No plan, spec, ledger or resume file is tracked in either repository. A plan
+   that will be implemented ends with its units, cut while planning (step 3 is their shape)
+   and approved with the plan:
+   - `## Units`: the runs in order, each with its base (the trunk, or the head the run before
+     it merged) and its gate, then its units. One run is one implement launch.
+   - `## Not implement`: every other item (prose, Python, tooling, a host step, a measurement)
+     with its owner: the session, one agent, or the operator.
+
+   The session that executes passes a run's units as written. A unit it would change goes
+   back to the plan, and to the operator, first.
 2. **Persist open work as issues.** An issue body carries the units still to do, with their
    contracts. A deferral is `gh issue create`, at the moment it is found. Milestone state is
    `docs/project-context.md` (pb) or bsc-geth's project context (its docs index,
    `docs/fork/README.md`, lists it). An issue about
    Claude itself (steering, this kit, a hook, skill, agent or workflow, the harness, model
    cost) is filed in `mrinaldhillon/blockchain-kit`, never in the repository you are in.
-3. **Cut units.** A unit is `{id, brief, packages, skills?}`:
+3. **Cut units**, in the plan (step 1). A unit is `{id, brief, packages, skills?}`:
    - The brief is a contract: the files, the interfaces with exact signatures, the invariants
      each test protects, and what is out of scope. Bodies are the implementer's. A brief the
      implementer would have to guess from is not ready.

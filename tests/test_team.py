@@ -77,6 +77,7 @@ class Team(unittest.TestCase):
         self.assertIn("`prediction-bot` (worker session `prediction-bot-worker`)", text)
         self.assertIn("`bsc-geth` (worker session `bsc-geth-worker`)", text)
         self.assertIn("executes nothing", text)
+        self.assertIn("`## Units` and `## Not implement` sections", text)
         settings = json.loads((lead / ".claude/settings.json").read_text())
         self.assertEqual(settings["enabledPlugins"], {PLUGIN: True})
         installs = [c for c in self.claude_calls() if c["argv"][:2] == ["plugin", "install"]]
