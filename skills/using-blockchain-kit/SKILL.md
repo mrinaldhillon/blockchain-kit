@@ -14,7 +14,7 @@ anything here.
 |---|---|
 | **Changing the fork itself**: any edit, build, test or commit in bsc-geth; moving the pin | `blockchain-kit:fork-development` |
 | Before editing any Go file in the fork | `blockchain-kit:fork-ext-convention` |
-| Anything under the fork's `deploy/production/`, its `config.toml` or `ExecStart` | `blockchain-kit:fork-deploy` |
+| Anything in the infra repo (the production host bundle), the node's `config.toml` or `ExecStart`, a unit on the host | `blockchain-kit:fork-deploy` |
 | The measurement campaign: `cmd/campaign`, `bsc-campaign.timer`, an A/B, a hold | `blockchain-kit:campaign` |
 | Moving the fork to a new upstream tag | the user's `/blockchain-kit:upstream-rebase`: not model-invocable |
 | Before a Go edit, deleting code as unused, or a rename | `blockchain-kit:go` |
@@ -37,7 +37,7 @@ anything here.
 | The fork pin moved, or a needed symbol is not in the index | the `blockchain-kit:fork-indexer` agent |
 | The one-time live capture of test fixtures | the `blockchain-kit:fixture-capturer` agent |
 | Right-sizing or tuning the running node | the `blockchain-kit:infra-profiler` agent |
-| Several independent units of one change, each with its own brief and packages | `/blockchain-kit:implement`: the user's command, which runs the `blockchain-kit:implement` workflow |
+| Several independent units of one change, each with its own brief and packages | `/blockchain-kit:implement`, on the user's request or their approval of a plan's `## Units`; it runs the `blockchain-kit:implement` workflow |
 | A pull request or branch reviewed against what it was written to do: the contract, its soundness, then the code | `/blockchain-kit:review`: the user's command, which runs the `blockchain-kit:review` workflow |
 | A workflow script written in the session (the `Workflow` tool) | every `agent()` names `model`: `blockchain-kit:working-here`, Tiers and dispatch. The `workflow-tiers` hook refuses one that leaves it unset |
 
@@ -58,8 +58,8 @@ anything here.
 
 - **This tree is the fork** (`module github.com/ethereum/go-ethereum`). No pin and no index:
   `bsc-fork` exits 2, gopls answers natively, and this source is the reference.
-- **Landing:** the class's gate green (`make audit-ext`; `make lint` before a push; `bash
-  deploy/production/host/tests/run.sh` for `deploy/`), then `git push origin mrinal/dev`. No
+- **Landing:** the class's gate green (`make audit-ext`; `make lint` before a push), then
+  `git push origin mrinal/dev`. No
   CI, no `land`, no confirmation. `mrinal/master` is not touched. A
   production deploy is the operator's.
 - **Heavy work on srv** (the full suite, lint, `geth-prod`, `go test ./...`) runs capped:

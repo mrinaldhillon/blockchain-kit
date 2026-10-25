@@ -24,8 +24,7 @@
 #            and unpack into build/cache/ at each session start; `go install` of the same
 #            version is the fallback when the GitHub release host is refused
 #   modules  `go mod download` when the clone is at hand, time-capped
-#   tools    shellcheck (apt; deploy/production/host/tests/run.sh runs its shellcheck suite
-#            when it is on PATH, else SKIPs) and benchstat (the perf gate of the fork's
+#   tools    shellcheck (apt; for the fork's shell scripts) and benchstat (the perf gate of the fork's
 #            hygiene refactor compares Benchmark*Ext before/after); each tolerated absent
 #
 # Every step is `|| true`: a miss costs the session a download, never its start. The

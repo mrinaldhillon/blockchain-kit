@@ -27,7 +27,7 @@ rule. The fork's steering is this skill and these:
 | Load | When |
 |---|---|
 | `blockchain-kit:fork-ext-convention` | before editing any Go file in the fork |
-| `blockchain-kit:fork-deploy` | anything under `deploy/production/**` |
+| `blockchain-kit:fork-deploy` | the production host bundle (the infra repo), a fork TOML key or flag |
 | `blockchain-kit:campaign` | the measurement campaign (`cmd/campaign`, `bsc-campaign.timer`) |
 | `blockchain-kit:upstream-rebase` | moving the fork to a new upstream tag |
 | the fork's feature inventory (its docs index, `docs/fork/README.md`, lists it) | what the fork adds, feature by feature, before changing one (`references/features.md` points there) |
@@ -131,8 +131,8 @@ bot's message names the fork SHA it moves the pin to.
 ## Map of the fork's docs
 
 The fork keeps its own map: `docs/fork/README.md`, one line per document under `docs/fork/`
-(rules and state, contracts, decisions, history) and the documents elsewhere in its tree
-(`deploy/production/`, each `cmd/<tool>/README.md`). Read it there; the kit names a fork
+(rules and state, contracts, decisions, history), the documents elsewhere in its tree (each
+`cmd/<tool>/README.md`) and the infra repo's, which own the production host. Read it there; the kit names a fork
 document by what it is and carries this one path. Three to read before acting: the
 development document before building, gating or landing a change; the project context
 (milestone state, settled rulings, facts expensive to re-derive) before re-opening a design

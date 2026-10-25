@@ -1,46 +1,49 @@
 ---
 name: fork-deploy
-description: "The fork's deploy/production tree: config.toml, the geth unit, the host manifests."
+description: "The production host bundle, in the infra repo: the node's config.toml, the geth and bot units, the one MANIFEST, the runbooks."
 ---
 
-**When to load:** Use before changing anything under deploy/production/ in the bsc-geth fork checkout, or anything that affects the node's config.toml, its systemd unit's ExecStart, the host bundle's MANIFEST, or which repo installs a path on the production host. Covers the rules for the offline gate, the two config checkers, one writer per path across the fork's and the bot's manifests, and the never-set list; the facts behind each are the fork's deploy docs.
+**When to load:** Use before changing anything in the infra repo (`mrinaldhillon/infra`), or anything that affects the node's `config.toml`, a geth unit's `ExecStart`, a unit or row installed on the production host, or a fork TOML key or flag. Covers the rules for the offline gate, the two config checkers, the one MANIFEST, the paired fork and infra change, and the never-set list; the facts behind each are the infra repo's docs.
 
-# The fork's production deploy bundle
+# The production host bundle
 
-**The fork owns the production host.** Its bundle is `deploy/production/` in the fork tree,
-documented beside it. The fork's docs index (`docs/fork/README.md`, its "Elsewhere in the tree"
-list) names those documents: the reasoning behind every installed number and the things never
-to do on the node, the host bundle (manifest, installer, verifier, offline tests), the two
-runbooks, and the post-deploy soak with the health gate. Read the facts there: the host, the
-files, the checks and their numbers change with the fork, and this skill holds only the rules.
-prediction-bot keeps only bot-specific infra, in its own manifest.
+**The infra repo owns the production host.** Every installed row on it (geth's unit and
+`config.toml`, the slices, sysctl, NIC steering, and prediction-bot's bot, collector and ETL
+units) is one `host/MANIFEST`, with one installer and a read-only verifier. It builds nothing:
+the node binary and the fork's tools are built in bsc-geth, the bot and collectors in
+prediction-bot. Its `README.md` is the reasoning behind every installed number and the keys and
+flags never to set; `host/README.md` is the bundle (manifest, installer, verifier, offline
+tests); `runbooks/` holds the rebuild, the redeploy and the post-deploy health check. The fork's
+docs index and prediction-bot's operations document point there, and the latter names the
+clone's default path. Read the facts there: this skill holds only the rules.
 
 ## Before changing anything there
 
-Paths are in the fork tree. In a bsc-geth root run them as written; from prediction-bot,
-`bash "$BSC_FORK_PATH"/deploy/production/…`.
+Paths are in the infra clone. From a bsc-geth or prediction-bot session every command names
+that tree (`bash <infra>/host/tests/run.sh`, `git -C <infra> …`), never a `cd`; a read or edit
+there that is refused is added by the user (`/add-dir`).
 
-- **Run the offline gate** the host bundle's README names, with any fixture step it puts
-  first. No CI runs on the working branch pair; this is the only evidence.
-- **Keep both config checkers passing.** Anything affecting `config.toml` semantics or the
-  unit's `ExecStart` must keep both of the fork's checkers green: the one that says the
-  pairing is correct for this fork version and the one that says geth loads it. Neither
-  implies the other. Update a checker's rules in the same change as what they gate.
-- **One writer per path.** No installed path may appear in both the fork's manifest and the
-  bot's. Changing the split is a paired change (the fork's manifest, the bot's manifest and
-  the fork's contracted list of bot paths) in one loop (`blockchain-kit:fork-development`).
-  What asserts it, offline and on the host, and the install order across the two manifests
-  are the host bundle's README.
-- **The never list.** The deploy README names the keys and flags never to set or re-add on
-  this node, and the irreversible one; read it before any `config.toml` or `ExecStart`
-  change, and the rebase landmines before re-adding anything upstream removed.
-- A new `*Ext` TOML key or flag is a fork surface (`blockchain-kit:fork-ext-convention`)
-  and a row in the correctness checker, in the same change.
+- **Run the offline gate**, `host/tests/run.sh`, which runs the tools' suites too. No CI runs
+  in the infra repo; this is the only evidence.
+- **Keep both config checkers passing.** Anything affecting `config.toml` semantics or a geth
+  unit's `ExecStart` keeps both green: `tools/check-config-ext.sh` (the pairing is correct for
+  this fork version) and `host/geth-preflight.sh` (geth loads it and accepts every flag).
+  Neither implies the other. Update a checker's rules in the same change as what they gate.
+- **One MANIFEST.** A path on the host is installed only by its row there, and nothing under
+  `host/srv/` is unmanaged; the offline install test and the verifier assert it. A change to
+  what is installed is one change in the infra repo.
+- **A fork TOML key or flag is a paired change**: the surface in bsc-geth
+  (`blockchain-kit:fork-ext-convention`), and in the infra repo the `config.toml` or `ExecStart`
+  that sets it and its row in the correctness checker. Two repositories, two commits, the
+  fork's first; the infra commit names the fork commit.
+- **The never list.** The infra README names the keys and flags never to set or re-add on this
+  node, and the irreversible one; read it before any `config.toml` or `ExecStart` change, and
+  the fork's rebase landmines before re-adding anything upstream removed.
 
 ## Runbooks
 
-Rebuilding a wiped host and redeploying a new binary onto the running host, with
-prediction-bot's side sequenced in, are the fork's two runbooks, which the index lists. Both
-are numbered steps with a pass condition each: run in order, stop on a failed check. Running
-either against the live host is the user's: an agent prepares and verifies offline, and never
-touches the live service.
+Rebuilding a wiped host and redeploying onto the running host, with prediction-bot's side
+sequenced in, are the infra repo's runbooks, with the post-deploy health check beside them.
+Both are numbered steps with a pass condition each: run in order, stop on a failed check.
+Running either against the live host is the user's: an agent prepares and verifies offline,
+and never touches the live service.

@@ -121,7 +121,7 @@ and branch protection on `main` requires `ci` and `steering`, strict, admins inc
 | `go` | Go authoring bindings. Unchanged. |
 | `fork-lookup`, `fork-node-api`, `contract-abi`, `binance-streams`, `record-format`, `replay-parity`, `environment-detection`, `hot-path-determinism` | Routers to pb `docs/`. |
 | `fork-development`, `fork-ext-convention`, `fork-deploy`, `upstream-rebase` | Routers to bsc-geth `docs/`, for both roots (§2), plus pb's pin-and-checkout loop. |
-| `campaign` (new, 2026-10-14) | Router to the fork's measurement campaign: `cmd/campaign/README.md`, `deploy/production/README.md` §Campaign, `bsc-campaign.timer`. |
+| `campaign` (new, 2026-10-14) | Router to the fork's measurement campaign: `cmd/campaign/README.md`, the infra repo's `README.md` §Campaign, `bsc-campaign.timer`. |
 
 ### 5.2 Agents
 
@@ -368,8 +368,8 @@ class, and the class is read off the diff:
 bsc-geth adds two classes (decided, 2026-10-14; `working-here` carries them): **Fork Go**
 (`*_ext.go` and upstream files under the wiring rule; package-scoped gates in a capped unit on
 the prod host, then `make audit-ext`, and `make lint` before a push; one review seat with the
-`Ext` and landmine angles) and **Host** (`deploy/production/`; `bash
-deploy/production/host/tests/run.sh`, plus `check-config-ext.sh` and `host/geth-preflight.sh`
+`Ext` and landmine angles) and **Host** (the infra repo, `mrinaldhillon/infra`, which owns the production host; `bash
+host/tests/run.sh` in its clone, plus `tools/check-config-ext.sh` and `host/geth-preflight.sh`
 before a `config.toml` or `ExecStart` change; the install itself is the operator's).
 
 Rules that follow:

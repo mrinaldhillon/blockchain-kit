@@ -7,14 +7,15 @@ description: "The fork's measurement campaign: cmd/campaign, its locks and holds
 
 # The measurement campaign
 
-A router: the facts live in the fork, and this skill names where. Paths are in the fork tree.
+A router: the facts live in the fork and in the infra repo, and this skill names where. Paths
+are in the fork tree unless the row names the infra repo.
 
 | Question | Home |
 |---|---|
 | The commands, the arm locks, a hold (at most 24 h), `ack`, `run <item> --recover`, exit codes, the files under `--dir` | `cmd/campaign/README.md` |
 | The on-host command line (`--dir`, `--history`, `--plan` as installed) | `cmd/campaign/README.md` |
-| What the timer runs, where the ledger and the plan live, and that A/B items run only by hand (`campaign run <item>`), never from the timer | `deploy/production/README.md` §Campaign |
-| The units | `deploy/production/host/srv/etc/systemd/system/bsc-campaign.{timer,service}` (`blockchain-kit:fork-deploy`) |
+| What the timer runs, where the ledger and the plan live, and that A/B items run only by hand (`campaign run <item>`), never from the timer | the infra repo's `README.md` §Campaign |
+| The units | the infra repo's `host/srv/etc/systemd/system/bsc-campaign.{timer,service}` (`blockchain-kit:fork-deploy`) |
 
 An A/B writes to the live node: what it may write, and how it rolls back, is
 `cmd/campaign/README.md` §What it writes to the node. Read it before starting one.

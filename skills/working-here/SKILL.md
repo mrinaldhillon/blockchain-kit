@@ -45,7 +45,10 @@ anything here.
    - Units are independent: no two share a Go package, and none needs another's result. Work
      that is coupled is one unit.
    - Name the kit skills a unit needs. A subagent gets none by description.
-4. **Run `/blockchain-kit:implement`** when the user asks for it: lanes in worktrees beside
+4. **Run `/blockchain-kit:implement`** when the user asks for implementation: the command
+   typed, or an approval of a plan whose `## Units` it launches ("approved, implement it"),
+   which is the request for every run in order, each from the head the run before it merged.
+   Before the first launch, say the runs and units it will start. Lanes in worktrees beside
    the clone (never inside it), one merged run branch, the gate, one review, one fix round. Its args always carry `project`
    and `module` (the command says how). It runs in the background and returns
    `{merged, conflicted, handbacks, stalled, gate, findings, owed, head}`.
@@ -83,7 +86,7 @@ The class is read off the diff and decides the ceremony. The last two rows are b
 | Product Go | `cmd/`, `internal/` | the lanes the selector names | one seat at merge: the workflow's, or one `blockchain-kit:code-reviewer` dispatch briefed with the PR body and its issue or ADR; `/blockchain-kit:review` when the user runs it | none |
 | Guarded Go | record spine, hot path, money path | the same, plus `make replay-parity` when owed | the same, and you read the diff | an ADR only when an invariant, a stored-data contract or a boundary changes |
 | Fork Go | `*_ext.go`, and upstream files under the wiring rule | package-scoped gates in a capped unit on srv, then `make audit-ext`; `make lint` before a push | one seat, with the `Ext` and landmine angles | an ADR only for a decision about the node |
-| Host | `deploy/production/` | `bash deploy/production/host/tests/run.sh`; `check-config-ext.sh` and `host/geth-preflight.sh` before a `config.toml` or `ExecStart` change | none | none; the install itself is the operator's |
+| Host | the infra repo (`mrinaldhillon/infra`) | `bash host/tests/run.sh` in its clone; `tools/check-config-ext.sh` and `host/geth-preflight.sh` before a `config.toml` or `ExecStart` change (`blockchain-kit:fork-deploy`) | none | none; the install itself is the operator's |
 
 - **One branch per change, whatever it touches.** Code, its docs and its tooling land together.
 - **A prose change never costs a PR.** In prediction-bot it rides the next
