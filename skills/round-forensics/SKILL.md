@@ -11,6 +11,7 @@ description: "prediction-bot's raw archive read by hand: one round, one decision
 - Reading one round, one block window or one decision record out of `/data/raw`.
 - Releasing the bot or a collector, or judging what the release recorded.
 - Running or reading `tools/postdeploy_check.py`; writing a `docs/data-deprecations/` record.
+- The recording's own integrity (gaps, digests, duplicates, cadence, per stream) is `blockchain-kit:archive-check`, one tool: load it instead of writing a segdump script for the question.
 
 A router: the facts live in prediction-bot, and this skill names where. Paths are in the pb
 tree; a value is read there, in the tree you are changing, never from memory or from here. The
