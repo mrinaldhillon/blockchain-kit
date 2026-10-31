@@ -35,11 +35,13 @@ read by the main loop and `make replay-parity` when owed.
 | `skills/using-blockchain-kit` | the routing table, given at session start |
 | `skills/` (bot) | `go`, `fork-lookup`, `fork-node-api`, `contract-abi`, `binance-streams`, `record-format`, `replay-parity`, `hot-path-determinism`, `environment-detection`, `round-forensics` |
 | `skills/` (fork) | `fork-development`, `fork-ext-convention`, `fork-deploy`, `campaign`, `upstream-rebase` |
-| `agents/` | `golang-implementer`, `code-reviewer`, `review-seat`, `determinism-auditor`, `parity-auditor`, `fork-indexer`, `fixture-capturer`, `infra-profiler`. None runs above opus, except the review workflow's intent and conformance seats (fable, operator 2026-10-23) |
+| `agents/` | `golang-implementer`, `code-reviewer`, `review-seat`, `determinism-auditor`, `parity-auditor`, `fork-indexer`, `fixture-capturer`, `infra-profiler`. None runs above opus, except the seats the review and project-review workflows name at fable |
 | `workflows/implement.js` | `blockchain-kit:implement`: Lane → Integrate → Gate → Review → Fix → Re-gate. Its header is the contract of its `args` and its return |
 | `commands/implement.md` | `/blockchain-kit:implement`, the entry to the workflow: the user's command, or the session's on the user's approval of a plan's units |
-| `workflows/review.js` | `blockchain-kit:review`: Intent → Find → Check. The contract and its soundness first (fable), then a conformance finder (fable) and two to five more by angle (opus), then one checker per changed file with a verdict per candidate (opus); pauses after Intent when the contract is in doubt; read-only. Its header is the contract of its `args` and its return |
+| `workflows/review.js` | `blockchain-kit:review`: Intent → Find → Check. The contract and its soundness first (fable), then conformance and domain finders (fable) and up to four more by angle (opus, sonnet for quality), then one checker per changed file with a verdict per candidate (fable); pauses after Intent when the contract is in doubt; read-only. Its header is the contract of its `args` and its return |
 | `commands/review.md` | `/blockchain-kit:review [<pr#>\|<base>]`, the user's entry to the review workflow |
+| `workflows/project-review.js` | `blockchain-kit:project-review`: Intent → Find → Check over a whole repository at one commit, from the repository's review guide; fable where a judgment decides, opus for pattern angles, sonnet for quality; read-only |
+| `commands/project-review.md` | `/blockchain-kit:project-review`, the user's entry to it: the gate through `bk-gate`, the run, the report |
 | `commands/init.md` | `/blockchain-kit:init`, once per project; reports, changes nothing |
 | `output-styles/` | `distinguished-engineer`, forced for the plugin: the project sets no `outputStyle` |
 | `bin/bsc-fork` | `pin`, `show`, `search`, `list`, `check`, `path` |
@@ -54,7 +56,7 @@ read by the main loop and `make replay-parity` when owed.
 | `hooks/land-shape` | runs a `dev-setup/ci/land` call in the foreground at a 30-minute timeout, with no `timeout` wrapper; fails open |
 | `hooks/reader-reminder` | in prediction-bot and the bsc-geth fork, adds the output style's two additions to Claude Code's writing rules (repo identifiers said in words; the `path:line`s listed at the end) beside each message the operator sends; fails open |
 | `hooks/workflow-tiers` | refuses a workflow script written in the session whose `agent()` calls leave `model` unset, so no stage inherits the session's tier by omission; fails open |
-| `hooks/implement-args` | fills `project` and `module` into an implement or review run's args from the tree, so the workflow picks its mode (the bot, the fork in place, a fork checkout) whatever the caller passed |
+| `hooks/implement-args` | fills `project` and `module` into an implement, review or project-review run's args from the tree, so the workflow picks its mode (the bot, the fork in place, a fork checkout) whatever the caller passed |
 | `hooks/worktree-create` | makes every harness worktree (a workflow lane, `claude -w`, EnterWorktree) beside the clone at `<parent>/.<clone>.worktrees/<name>`, never inside it, on `worktree-<name>` from the session's HEAD; refuses a parent inside a repository or a target that exists |
 | `hooks/worktree-remove` | removes a worktree the kit made when the harness retires it, uncommitted work refused and kept, then deletes its branch when merged |
 | `hooks/gofmt-on-edit` | formats a Go file Claude writes, in the project, a worktree of it, or the fork checkout |
