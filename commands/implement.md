@@ -17,7 +17,8 @@ is the header of `workflows/implement.js`; the process around it is `blockchain-
    with a `## Units` section, the run being launched is passed as written, its base and gate
    included; a unit that no longer fits goes back to the plan first. Without one, write the
    units now and show them before launching. Two units never share a package: split
-   differently, or run them as two runs.
+   differently, or run them as two runs. Docs prose is the session's: a brief's docs row comes
+   back in `docDeltas`, and a lane never edits it.
 2. **Preconditions**, one Bash call each; stop and say which failed:
    - `git branch --show-current` is the run branch: in prediction-bot not `main`; in bsc-geth
      `mrinal/dev` or a branch cut from it, never `master` or `mrinal/master`.
@@ -50,6 +51,7 @@ is the header of `workflows/implement.js`; the process around it is `blockchain-
      re-run the unit on the new head or drop it; remove what is abandoned
      (`git worktree remove`, `git branch -D`).
    - `gate` not green: read the tail; the fix is a new unit or yours.
+   - `docDeltas`: apply each on the run branch, as part of this change.
    - `findings.open`: fix, defer to an issue, or accept, and say which.
    - `owed.parity`: run `make replay-parity` once. `owed.read`: read those units' diffs
      yourself before landing.

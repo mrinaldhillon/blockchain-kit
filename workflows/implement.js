@@ -87,6 +87,7 @@ const LANE = {
       },
     },
     summary: { type: 'string', description: 'one line per path' },
+    docDeltas: { type: 'array', items: { type: 'string' }, description: 'docs prose this change owes: the file and the replacement sentence' },
     handback: { type: 'string', description: 'set only when the brief did not answer a question: the question and the options' },
   },
   required: ['branch', 'start', 'sha', 'paths', 'gates', 'summary'],
@@ -191,7 +192,7 @@ const modelOf = (stage) => (TIERS[stage] === 'session' ? {} : { model: TIERS[sta
 
 const result = (over) =>
   Object.assign(
-    { merged: [], conflicted: [], handbacks: [], stalled: [], gate: null, findings: { fixed: [], open: [] }, owed: { parity: [], read: [] }, head },
+    { merged: [], conflicted: [], handbacks: [], stalled: [], docDeltas, gate: null, findings: { fixed: [], open: [] }, owed: { parity: [], read: [] }, head },
     over,
   )
 
@@ -265,6 +266,8 @@ const lanePrompt = (unit, startAt) =>
       `Never touch go.mod or go.sum.\n\n`) +
   loadLine(skillsOf(unit)) +
   laneGates(unit) +
+  `Docs prose is the session's, even where the brief names it: edit none, and return each row in docDeltas with ` +
+  `the file and the replacement sentence. Go comments and goldens the brief names are yours. ` +
   `\n\nThe brief:\n${unit.brief}`
 
 const laneOpts = (unit) => ({
@@ -308,6 +311,7 @@ if (remote) {
 const handbacks = []
 const stalled = []
 const mergeable = []
+const docDeltas = []
 for (const { unit, out, startAt, notStarted } of lanes) {
   const id = String(unit.id)
   if (notStarted) {
@@ -331,6 +335,7 @@ for (const { unit, out, startAt, notStarted } of lanes) {
     stalled.push({ unit: id, stage: 'Lane', reason: 'returned without a commit and without a hand-back', branch: out.branch })
   } else {
     mergeable.push({ unit: id, branch: out.branch, sha: out.sha, paths: out.paths || [] })
+    for (const delta of out.docDeltas || []) docDeltas.push({ unit: id, delta })
   }
 }
 for (const h of handbacks) log(`${h.unit}: handed back, not merged — ${h.handback}`)
@@ -409,8 +414,8 @@ const runGate = async (phase) => {
     g = await agent(
       `Run exactly this one command from ${tree}, and nothing else:\n\n` +
         `  bk-gate ${remote ? `-C "${remote}" ` : ''}run -- ${gateCmd}\n\n` +
-        `Return its first output line verbatim as line, the rc number in that line as rc, and the lines after ` +
-        `it as tail. Do not fix anything, do not run it twice, do not read the out file. If bk-gate is not ` +
+        `Return its output line that starts "gate: " verbatim as line, the rc number in that line as rc, and the ` +
+        `lines after it as tail. Do not fix anything, do not run it twice, do not read the out file. If bk-gate is not ` +
         `found, return line "bk-gate: not found" and rc 127.`,
       { label: phase.toLowerCase(), phase, ...modelOf('gate'), effort: 'low', schema: GATE },
     )
@@ -418,9 +423,11 @@ const runGate = async (phase) => {
     g = null
   }
   if (!g) return { rc: null, line: 'the gate stage died', green: false }
-  const m = /^gate: \S+ rc=(-?\d+) t=\S+ out=\S+/.exec(String(g.line || '').trim())
+  // bk-gate prints a cap notice before the verdict on the production host: the first verdict
+  // line anywhere in what the stage returned is the gate's, whichever field it landed in.
+  const m = /^gate: \S+ rc=(-?\d+) t=\S+ out=\S+/m.exec(`${String(g.line || '').trim()}\n${String(g.tail || '')}`)
   const rc = m ? Number(m[1]) : null
-  return { rc, line: String(g.line || ''), tail: g.tail || '', green: rc === 0 }
+  return { rc, line: m ? m[0] : String(g.line || ''), tail: g.tail || '', green: rc === 0 }
 }
 
 let gate = { skipped: true, green: true, line: 'no gate bound' }
