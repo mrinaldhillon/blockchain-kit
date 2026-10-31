@@ -15,7 +15,7 @@ description: "prediction-bot's raw archive read by hand: one round, one decision
 
 A router: the facts live in prediction-bot, and this skill names where. Paths are in the pb
 tree; a value is read there, in the tree you are changing, never from memory or from here. The
-framing itself is `blockchain-kit:record-format`; the seal is `blockchain-kit:research-surface`.
+framing itself is `blockchain-kit:record-format`.
 
 **Where the facts live**
 

@@ -24,7 +24,6 @@ anything here.
 | Binance market data: SBE, aggTrade, depth snapshots, reconnect, the proxy | `blockchain-kit:binance-streams` |
 | The event log: framing, CRC, envelope, `EventKind`, the control stream | `blockchain-kit:record-format` |
 | Replay, the parity gate, a golden that moved | `blockchain-kit:replay-parity` |
-| Any work under prediction-bot's `research/`: a query, an entry, a screen, a holdout read, the seal, the registry, the nightly | `blockchain-kit:research-surface` |
 | Reading a round or a decision from the archive, verifying a redeploy, the post-deploy check, a deprecation record | `blockchain-kit:round-forensics` |
 | An integrity or data check of the archive: after a redeploy, the end-of-day pass, one stream's health, an archive-wide audit (`tools/archive_check.py`, never a throwaway script) | `blockchain-kit:archive-check` |
 | A diff in `internal/{event,eventlog,trigger,strategy,state,replay,executor}` | `blockchain-kit:hot-path-determinism`, then the `blockchain-kit:determinism-auditor` agent |
@@ -62,7 +61,7 @@ anything here.
 - **Landing:** the class's gate green (`make audit-ext`; `make lint` before a push), then
   `git push origin mrinal/dev`. No
   CI, no `land`, no confirmation. `mrinal/master` is not touched. A
-  production deploy is the operator's.
+  production deploy the change needs is part of the same landing, and its hand is the operator's.
 - **Heavy work on srv** (the full suite, lint, `geth-prod`, `go test ./...`) runs capped:
   `python3 build/unit_run.py --name <slug> --mem 16G -- <cmd>`, then `python3
   build/unit_run.py --wait <slug>` as foreground Bash at timeout 1800000; or

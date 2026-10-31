@@ -19,3 +19,6 @@ are in the fork tree unless the row names the infra repo.
 
 An A/B writes to the live node: what it may write, and how it rolls back, is
 `cmd/campaign/README.md` §What it writes to the node. Read it before starting one.
+
+A campaign verdict or an A window gates nothing else: a plan that holds a deploy behind one is
+refused unless the operator asked for that wait by name.

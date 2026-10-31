@@ -63,8 +63,9 @@ is steps 1, 3 and 5, and it ends at the push. pb re-pins only for a change to wh
 a method pb calls, a field it decodes, a `-1039xxx` code it switches on, a feature-status key it
 reads. bsc's announcement for the build names any such change, from its diff over the fork
 files pb's code cites (pb ADR 0127 decision 4). Only then do steps 6 to 8 run, in a
-prediction-bot session, once the node that serves the change is live: the pin never passes the
-deployed node (decision 3).
+prediction-bot session, as soon as the node that serves the change is live: the pin never passes
+the deployed node (decision 3), and it follows the restart in the same landing, with no soak
+between them.
 
 1. **Branch.** The fork tree is on `mrinal/dev` (or a branch cut from it), never `master`
    or `mrinal/master`. In pb, `bsc-fork pin` shows the branch.
@@ -77,7 +78,8 @@ deployed node (decision 3).
 5. **Commit and push the fork** (the fork's commit conventions, in its development
    document): with its gate green,
    `git push origin mrinal/dev`, behind `.githooks/pre-push`. No CI runs and no confirmation
-   is needed; a production deploy is the operator's.
+   is needed. A production deploy the change needs is part of the same landing, and its hand
+   is the operator's.
 6. **pb: move the pin**, for a consumed-API change only (above), with the pushed commit's
    full SHA:
    `go mod edit -replace=github.com/ethereum/go-ethereum=github.com/mrinaldhillon/bsc-geth@<sha>`

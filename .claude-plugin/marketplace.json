@@ -9,7 +9,7 @@
     {
       "name": "blockchain-kit",
       "source": "./",
-      "description": "bsc-fork and setup/update scripts on PATH, a session-start routing hook, gofmt on edit, plus skills: go, fork-lookup, fork-node-api, contract-abi, binance-streams, record-format, replay-parity, hot-path-determinism, environment-detection, research-surface, round-forensics, and seven agents."
+      "description": "bsc-fork and setup/update scripts on PATH, a session-start routing hook, gofmt on edit, plus skills: go, fork-lookup, fork-node-api, contract-abi, binance-streams, record-format, replay-parity, hot-path-determinism, environment-detection, round-forensics, and seven agents."
     }
   ]
 }

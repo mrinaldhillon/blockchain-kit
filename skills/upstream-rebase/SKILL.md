@@ -122,8 +122,11 @@ run locally; heavy work as a capped unit, `blockchain-kit:fork-development`
 - **Rewrite the fork's landmines document for the next
   target** — each rebase consumes it and refills it for the following one, in
   a bsc-geth commit. The kit's `references/landmines.md` stays a pointer.
-- The production cutover, soak, and PGO recapture are out of scope: the
-  fork's cutover runbook owns them (the index lists it).
+- The rebase, its push, the cutover and the pin move are one landing, with no
+  soak between them: the push commands and the restart are handed to the
+  operator, and everything else runs in the same session. The steps of the
+  cutover and the PGO recapture are the fork's cutover runbook's (the index
+  lists it).
 - Open work from the run is issues; a durable inventory goes in the fork's
   review history. No plan or ledger is tracked. The fork's docs index, `docs/fork/README.md`,
   names the history directories, where the last adoption's plan, design and inventory are.

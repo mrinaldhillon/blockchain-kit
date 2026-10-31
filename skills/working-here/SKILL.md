@@ -55,8 +55,9 @@ anything here.
 5. **Adjudicate.** Hand-backs are questions for you. A conflicted or stalled lane names what
    it left. Open findings are fixed, deferred to an issue, or accepted, and you say which.
    `owed.parity`: run `make replay-parity` once. `owed.read`: read those diffs yourself.
-6. **Land in one call**, and nothing after it. Landing needs no confirmation; a production
-   deploy (a geth restart, a host install) is a separate decision and is the operator's.
+6. **Land in one call**, and nothing after it. Landing needs no confirmation. A production
+   deploy the change needs (a geth restart, a host install) is part of the same landing, and
+   its hand is the operator's.
    - prediction-bot: `git push -q && dev-setup/ci/land <PR>`, foreground Bash, timeout 1800000
      (pb's `BASH_MAX_TIMEOUT_MS`).
      `land` waits for the pushed head, runs the lanes the diff selects, squash-merges on green
@@ -73,7 +74,12 @@ One unit, or a change too small to brief, skips steps 3 to 5: dispatch
 `blockchain-kit:golang-implementer` once, or make a prose or tooling edit yourself.
 
 When the operator is offline, run the approved plan to completion and batch what only they
-can answer for the end.
+can answer for the end. A wait is never one of those.
+
+Timelines are in hours. A change lands whole in one session, across both repositories when it
+spans them. No step waits for a soak, a control window, a campaign verdict or a later redeploy
+unless the operator asks for that wait by name; a plan that stages a change across restarts is
+wrong.
 
 ## What a change owes
 
