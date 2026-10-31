@@ -26,11 +26,13 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 
 NAME_OK = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 BRANCH_PREFIX = "worktree-"  # the harness's own naming, which the implement workflow keys on
 DEFAULT_REL = Path(".claude/worktrees")  # the harness's own location: the kill switch's
+STRAY_PAUSE_S = 0.2  # how long an unlisted entry gets to become a sibling lane's worktree
 
 
 class WorktreeError(Exception):
@@ -114,8 +116,13 @@ def place(main: Path, name: str, default_location: bool = False) -> Path:
         if not parent.is_dir() or parent.is_symlink():
             raise WorktreeError(f"{parent} exists and is not a plain directory")
         ours = listed(main)
-        for entry in parent.iterdir():
-            if real(entry) not in ours:
+        unlisted = [entry for entry in parent.iterdir() if real(entry) not in ours]
+        if unlisted:
+            # `git worktree add` makes the directory before the gitdir file that lists it: a sibling lane mid-creation.
+            time.sleep(STRAY_PAUSE_S)
+            ours = listed(main)
+        for entry in unlisted:
+            if os.path.lexists(entry) and real(entry) not in ours:
                 raise WorktreeError(f"{entry} is not a worktree of {main}: remove it yourself, then retry")
     return target
 
