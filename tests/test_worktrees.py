@@ -17,10 +17,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.dont_write_bytecode = True
 
 KIT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(KIT / "lib"))
+import bkworktree  # noqa: E402
+
 CREATE = KIT / "hooks" / "worktree-create"
 REMOVE = KIT / "hooks" / "worktree-remove"
 GIT_ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
@@ -149,6 +153,23 @@ class Worktrees(unittest.TestCase):
         self.assertEqual(len(self.worktrees(nested)), 1)
 
     # remove
+
+    def test_a_sibling_lane_mid_creation_is_not_a_stray(self):
+        # git worktree add makes the directory before it is listed: the re-list after the pause must take it
+        sibling = self.tmp / "work/.bot.worktrees/wf_run-1"
+        sibling.mkdir(parents=True)
+        real_listed, lists = bkworktree.listed, []
+
+        def listed(main: Path) -> dict:
+            lists.append(main)
+            if len(lists) == 2:
+                git(self.clone, "worktree", "add", "-q", "-b", "worktree-wf_run-1", str(sibling))
+            return real_listed(main)
+
+        with mock.patch.object(bkworktree, "listed", listed):
+            target = bkworktree.place(self.clone, "wf_run-2")
+        self.assertEqual(len(lists), 2)
+        self.assertEqual(target, sibling.parent / "wf_run-2")
 
     def test_remove_takes_a_lane_and_its_merged_branch(self):
         lane = Path(self.create("wf_run-1")[1].strip())
