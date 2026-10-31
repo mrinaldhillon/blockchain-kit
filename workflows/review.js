@@ -5,8 +5,8 @@ export const meta = {
     'A pull request or branch in prediction-bot or bsc-geth reviewed against what it was written to do. Not for prose, and not for a diff an implement run already reviewed unless the user asks.',
   phases: [
     { title: 'Intent', detail: 'one seat: the contract from the PR, issue, ADR, plan or brief; whether that logic is sound for the domain; the diff size', model: 'fable' },
-    { title: 'Find', detail: 'the conformance finder at fable, and two to five more by angle at opus, by the size of the diff', model: 'opus' },
-    { title: 'Check', detail: 'one independent checker per changed file with candidates, a verdict for each, by reading', model: 'opus' },
+    { title: 'Find', detail: 'the conformance and domain finders at fable, and one to four more by angle at opus, by the size of the diff', model: 'fable' },
+    { title: 'Check', detail: 'one independent checker per changed file with candidates, a verdict for each, by reading', model: 'fable' },
   ],
 }
 
@@ -25,8 +25,8 @@ export const meta = {
 //     contract: '…',          // optional: the brief or contract text, when there is no PR
 //     project: '/abs/clone',  // filled with `module` by hooks/implement-args
 //     module: 'example.com/bot',
-//     tiers: { intent: 'fable', conformance: 'fable', find: 'opus', check: 'opus' },
-//                             // fable only for the first two; nothing above opus elsewhere
+//     tiers: { intent: 'fable', conformance: 'fable', domain: 'fable', find: 'opus', quality: 'sonnet', check: 'fable' },
+//                             // fable only for intent, conformance, domain and check; nothing above opus elsewhere
 //     maxChecks: 40,          // the most candidates checked; the rest come back unchecked
 //     proceed: true,          // go past the pause after Intent (below); resume the paused run
 //   }
@@ -39,10 +39,11 @@ export const meta = {
 // blocker in its logic) and returns it for the user; `proceed: true` goes on.
 //
 // Seats: one intent seat; the conformance finder plus ceil(changed lines / 150) more kept
-// within 2..5; one checker per changed file that has candidates, eight candidates at most
-// each, `maxChecks` candidates in all. Fable where most judgment is needed (operator,
-// 2026-10-23): the contract and its soundness, which everything after is measured
-// against, and the mapping of code to intent; opus for the pattern angles and the checks.
+// within 2..5, the domain finder always one of them; one checker per changed file that has
+// candidates, eight candidates at most each, `maxChecks` candidates in all. Fable wherever a
+// wrong judgment misdirects or silently drops something: the contract and its soundness, the
+// mapping of code to intent, the project's invariants and every checker, whose refutal drops
+// a finding. Opus for the pattern angles; sonnet for quality when it has its own seat.
 // Nothing is edited, built or run; the return is the contract as the intent seat read it,
 // every candidate that survived its check with the verdict that decided it, what was
 // refuted, merged as a duplicate or left unchecked and why, and the coverage.
@@ -132,10 +133,8 @@ const project = a.project ? String(a.project) : ''
 const projectModule = a.module ? String(a.module) : ''
 const fork = projectModule === UPSTREAM
 const mode = fork ? 'fork' : 'client'
-// Operator, 2026-10-23: fable for the contract and for conformance, where a wrong judgment
-// misdirects everything after it; opus checkers, since a refutal drops the finding.
-const TIERS = Object.assign({ intent: 'fable', conformance: 'fable', find: 'opus', check: 'opus' }, a.tiers || {})
-const FABLE_STAGES = ['intent', 'conformance']
+const TIERS = Object.assign({ intent: 'fable', conformance: 'fable', domain: 'fable', find: 'opus', quality: 'sonnet', check: 'fable' }, a.tiers || {})
+const FABLE_STAGES = ['intent', 'conformance', 'domain', 'check']
 const maxChecks = Number.isInteger(a.maxChecks) && a.maxChecks > 0 ? a.maxChecks : 40
 const proceed = a.proceed === true
 const forkIndex = project ? `${project.replace(/\/+$/, '')}/docs/fork/README.md` : 'docs/fork/README.md'
@@ -148,7 +147,7 @@ if (!base || !head) return refuse('base and head are required', { expected: '{ba
 const above = Object.entries(TIERS).filter(
   ([stage, m]) => /mythos|session/i.test(String(m)) || (/fable/i.test(String(m)) && !FABLE_STAGES.includes(stage)),
 )
-if (above.length) return refuse('tier above opus', { tiers: Object.fromEntries(above), allowed: 'fable for intent and conformance; opus and lower, by name, elsewhere' })
+if (above.length) return refuse('tier above opus', { tiers: Object.fromEntries(above), allowed: 'fable for intent, conformance, domain and check; opus and lower, by name, elsewhere' })
 if (!projectModule) log('no module given: whether this project is the bsc-geth fork is unchecked; the review uses the bot\'s angles')
 log(`${mode} · ${base}..${head}${pr ? ` · PR #${pr}` : ''}${contractText ? ' · brief given' : ''}`)
 
@@ -265,17 +264,17 @@ const ANGLES = {
     `a special case layered on shared code where the mechanism should have generalized (in the fork, a branch in an ` +
     `upstream path instead of an \`Ext\` hook); and a rule of a governing \`CLAUDE.md\`, quoted, that a line breaks.`,
 }
-// The conformance finder is its own seat at every size, at its own tier; the other five
-// angles share the opus finders, merged when there are fewer than five.
+// The conformance and domain finders are their own seats at every size, at their own tiers;
+// the other four angles share the rest, merged when there are fewer than four.
 const GROUPS = {
-  2: [['lines', 'tracer'], ['domain', 'tests', 'quality']],
-  3: [['lines', 'tracer'], ['domain'], ['tests', 'quality']],
-  4: [['lines'], ['tracer'], ['domain'], ['tests', 'quality']],
-  5: [['lines'], ['tracer'], ['domain'], ['tests'], ['quality']],
+  2: [['domain'], ['lines', 'tracer', 'tests', 'quality']],
+  3: [['domain'], ['lines', 'tracer'], ['tests', 'quality']],
+  4: [['domain'], ['lines'], ['tracer'], ['tests', 'quality']],
+  5: [['domain'], ['lines'], ['tracer'], ['tests'], ['quality']],
 }
 const budget = Math.min(5, Math.max(2, Math.ceil(lines / 150)))
 const groups = [['conformance'], ...GROUPS[budget]]
-const tierOf = (group) => (group.includes('conformance') ? TIERS.conformance : TIERS.find)
+const tierOf = (group) => (group.length === 1 && group[0] in TIERS ? TIERS[group[0]] : TIERS.find)
 // The skills every finder and checker loads: `go` and, in the fork, the Ext convention,
 // whatever the intent seat named, then the ones it named for the touched surfaces.
 const skills = [

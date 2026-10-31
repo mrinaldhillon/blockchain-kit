@@ -9,7 +9,7 @@ and review briefs the bot's angles. This hook reads both from the disk, so the m
 the tree whatever the caller passed or forgot.
 
 It acts on a call whose `tool_input.name` is `blockchain-kit:implement`, `implement`,
-`blockchain-kit:review` or `review`. Every other Workflow call, a script or a scriptPath
+`blockchain-kit:review`, `review`, `blockchain-kit:project-review` or `project-review`. Every other Workflow call, a script or a scriptPath
 included, passes untouched.
 
   project  CLAUDE_PROJECT_DIR, else the git top level (the nearest directory holding
@@ -47,7 +47,8 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
 NAME = "implement-args"
-WORKFLOWS = frozenset({"blockchain-kit:implement", "implement", "blockchain-kit:review", "review"})
+WORKFLOWS = frozenset({"blockchain-kit:implement", "implement", "blockchain-kit:review", "review",
+                       "blockchain-kit:project-review", "project-review"})
 REASON = ("This project is the bsc-geth fork and the implement workflow could not be told so: without `module` "
           "it would brief bot-shaped lanes, whole-module gates included, in the fork's tree. Pass `project` "
           "and `module` (github.com/ethereum/go-ethereum) in args yourself.")

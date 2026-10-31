@@ -23,7 +23,7 @@ SEAT = "blockchain-kit:review-seat"
 A = "internal/recorder/a.go"
 B = "internal/recorder/b.go"
 CONF = "find:conformance"
-THREE = [CONF, "find:lines+tracer", "find:domain+tests+quality"]
+THREE = [CONF, "find:domain", "find:lines+tracer+tests+quality"]
 
 
 def args(**over: object) -> dict:
@@ -82,7 +82,7 @@ class Review(unittest.TestCase):
             ("no head", args(head=None), "base and head are required"),
             ("no base", args(base=""), "base and head are required"),
             ("fable for a pattern finder", args(tiers={"find": "fable"}), "tier above opus"),
-            ("fable for a checker", args(tiers={"check": "fable"}), "tier above opus"),
+            ("fable for quality", args(tiers={"quality": "fable"}), "tier above opus"),
             ("the session tier", args(tiers={"intent": "session"}), "tier above opus"),
             ("mythos, even for intent", args(tiers={"intent": "mythos"}), "tier above opus"),
         ]:
@@ -119,25 +119,27 @@ class Review(unittest.TestCase):
         for lines, finders in [
             (40, THREE),
             (300, THREE),
-            (400, [CONF, "find:lines+tracer", "find:domain", "find:tests+quality"]),
-            (600, [CONF, "find:lines", "find:tracer", "find:domain", "find:tests+quality"]),
-            (2000, [CONF, "find:lines", "find:tracer", "find:domain", "find:tests", "find:quality"]),
+            (400, [CONF, "find:domain", "find:lines+tracer", "find:tests+quality"]),
+            (600, [CONF, "find:domain", "find:lines", "find:tracer", "find:tests+quality"]),
+            (2000, [CONF, "find:domain", "find:lines", "find:tracer", "find:tests", "find:quality"]),
         ]:
             with self.subTest(lines=lines):
                 ran = self.run_script(args(), {"intent": intent(lines)})
                 self.assertEqual(self.labels(ran), ["intent", *finders])
                 self.assertEqual(ran["result"]["seats"], {"intent": 1, "find": len(finders), "check": 0})
 
-    def test_fable_reads_the_intent_and_the_conformance_opus_the_rest(self):
+    def test_fable_decides_opus_finds_patterns_sonnet_finds_quality(self):
         given = {"intent": intent(), CONF: finder(candidate("x", 5)), "check:" + A: verdicts(verdict("K1", "CONFIRMED"))}
         ran = self.run_script(args(), given)
         self.assertEqual({c["agentType"] for c in ran["calls"]}, {SEAT})
         self.assertEqual([(c["label"], c["model"]) for c in ran["calls"]],
-                         [("intent", "fable"), (CONF, "fable"), (THREE[1], "opus"), (THREE[2], "opus"),
-                          ("check:" + A, "opus")])
+                         [("intent", "fable"), (CONF, "fable"), (THREE[1], "fable"), (THREE[2], "opus"),
+                          ("check:" + A, "fable")])
         self.assertEqual(ran["phases"], ["Intent", "Find", "Check"])
-        cheap = self.run_script(args(tiers={"intent": "opus", "conformance": "opus", "check": "sonnet"}), given)
+        cheap = self.run_script(args(tiers={"intent": "opus", "conformance": "opus", "domain": "opus", "check": "sonnet"}), given)
         self.assertEqual([c["model"] for c in cheap["calls"]], ["opus", "opus", "opus", "opus", "sonnet"])
+        big = self.run_script(args(), {"intent": intent(lines=800)})
+        self.assertEqual(next(c["model"] for c in big["calls"] if c["label"] == "find:quality"), "sonnet")
 
     def test_the_intent_seat_reads_the_sources_before_the_code(self):
         ran = self.run_script(args(), {"intent": None})
@@ -157,20 +159,22 @@ class Review(unittest.TestCase):
         self.assertIn("do not raise them again:\n- no reorg handling", prompt)
         self.assertIn("before judging: blockchain-kit:go, blockchain-kit:record-format.", prompt)
         self.assertNotIn("a hypothesis, not a spec", prompt)
-        derived = self.prompt(self.run_script(args(proceed=True), {"intent": intent(derived=True)}), THREE[1])
+        derived = self.prompt(self.run_script(args(proceed=True), {"intent": intent(derived=True)}), THREE[2])
         self.assertIn("a hypothesis, not a spec", derived)
 
     def test_the_mode_picks_the_domain_angle(self):
-        client = self.prompt(self.run_script(args(), {"intent": intent()}), THREE[2])
+        client = self.prompt(self.run_script(args(), {"intent": intent()}), THREE[1])
         self.assertIn("docs/discipline.md` rules 6, 12, 14, 15", client)
-        self.assertIn("rule 47", client)
         self.assertNotIn("Ext convention", client)
         fork = self.prompt(self.run_script(args(module="github.com/ethereum/go-ethereum", project="/srv/bsc-geth/"),
-                                           {"intent": intent()}), THREE[2])
+                                           {"intent": intent()}), THREE[1])
         self.assertIn("The Ext convention", fork)
         self.assertIn("blockchain-kit:go, blockchain-kit:fork-ext-convention, blockchain-kit:record-format.", fork)
         self.assertIn("/srv/bsc-geth/docs/fork/README.md", fork)
-        self.assertNotIn("rule 47", fork)
+        tests = {m: self.prompt(self.run_script(args(module=m), {"intent": intent()}), THREE[2])
+                 for m in ("example.com/bot", "github.com/ethereum/go-ethereum")}
+        self.assertIn("rule 47", tests["example.com/bot"])
+        self.assertNotIn("rule 47", tests["github.com/ethereum/go-ethereum"])
         self.assertNotIn("discipline.md", fork)
 
     def test_one_checker_per_file_decides_what_stands(self):
@@ -212,7 +216,7 @@ class Review(unittest.TestCase):
                                         verdict("K3", "CONFIRMED"))}
         out = self.run_script(args(), given)["result"]
         self.assertEqual([(f["title"], f["angles"]) for f in out["findings"]],
-                         [("off by one", ["conformance"]), ("needless copy", ["domain+tests+quality"])])
+                         [("off by one", ["conformance"]), ("needless copy", ["lines+tracer+tests+quality"])])
         self.assertEqual(out["merged"], [{"id": "K2", "title": "same off by one", "into": "K1", "angle": "conformance"}])
 
     def test_a_file_with_many_candidates_is_split_and_the_total_capped(self):
@@ -229,7 +233,7 @@ class Review(unittest.TestCase):
 
     def test_a_dead_finder_is_a_coverage_hole(self):
         out = self.run_script(args(), {"intent": intent(), CONF: finder(), THREE[1]: finder()})["result"]
-        self.assertEqual(out["coverage"][2]["angles"], ["domain", "tests", "quality"])
+        self.assertEqual(out["coverage"][2]["angles"], ["lines", "tracer", "tests", "quality"])
         self.assertIn("were not covered", out["coverage"][2]["degraded"])
         self.assertIn("were not covered", " ".join(out["degraded"]))
 

@@ -129,7 +129,7 @@ and branch protection on `main` requires `ci` and `steering`, strict, admins inc
 |---|---|---|
 | `golang-implementer` | opus | Drops `LSP` from `tools:` (it is never in the live roster — measured). Its "never `git commit`; a brief cannot lift that" rule is replaced by the lane contract (§7): at `6796a58` both probe lanes refused to commit against the brief (measured). Absorbs `golang-implementer-lite`, which is deleted: implementation runs at opus (decided). |
 | `code-reviewer` (new) | opus | One seat over the merged diff of a run. Carries pb's reserved angles: determinism and parity, the record spine, import boundaries, hot-path blocking. Read, Bash and the read-only gopls tools (callers and implementations; pb's reviewer had them before the cut). A dispatch outside a run is briefed with the PR body and the issue, ADR or plan it names. |
-| `review-seat` (new) | opus; fable for the review workflow's intent and conformance seats | One read-only seat of the `review` workflow: the intent seat, a finder or a checker, as the script's brief says. Read, Bash, Skill and the read-only gopls tools. |
+| `review-seat` (new) | as each run names it: fable, opus or sonnet | One read-only seat of the `review` and `project-review` workflows: the intent seat, a finder or a checker, as the script's brief says. Read, Bash, Skill and the read-only gopls tools. |
 | `determinism-auditor`, `parity-auditor`, `fork-indexer`, `fixture-capturer`, `infra-profiler` | opus | Unchanged. An agent without `ToolSearch` gets its granted `mcp__gopls__*` tools undeferred and callable (measured on `parity-auditor`), so the auditors need no new grant. |
 
 pb's other eleven agents are not carried (§6).
@@ -313,24 +313,43 @@ ultra` and the single seat on the same pull requests (kit #7).
 | Stage | Seats | Does |
 |---|---|---|
 | Intent | one `review-seat`, fable | The contract as numbered items from the PR body, the issues and ADRs it names, or the brief; a source's "verified" is a claim. Then whether that logic is sound for the domain, through the kit's skills. Then the diff size |
-| Find | the conformance finder at fable, and `ceil(lines / 150)` more kept within 2..5 at opus | Conformance both ways (each item to code, each changed path to an item) is always its own seat. Five more angles, merged when there are fewer finders: line by line and what was removed, callers through gopls and Go's pitfalls, the domain (pb's four reserved angles or the fork's Ext convention and landmines), tests by reading, quality |
-| Check | one per changed file with candidates, eight candidates at most each, `maxChecks` (40) candidates in all, opus | A seat that raised none of them reads the file once and decides each candidate: CONFIRMED, PLAUSIBLE or REFUTED, refuted only when the code shows it. It marks a true duplicate; two defects on one line stay two |
+| Find | the conformance finder at fable, and `ceil(lines / 150)` more kept within 2..5: the domain finder at fable, the rest at opus, quality at sonnet when it has its own seat | Conformance both ways (each item to code, each changed path to an item) is always its own seat. Five more angles, merged when there are fewer finders: line by line and what was removed, callers through gopls and Go's pitfalls, the domain (pb's four reserved angles or the fork's Ext convention and landmines), tests by reading, quality |
+| Check | one per changed file with candidates, eight candidates at most each, `maxChecks` (40) candidates in all, fable | A seat that raised none of them reads the file once and decides each candidate: CONFIRMED, PLAUSIBLE or REFUTED, refuted only when the code shows it. It marks a true duplicate; two defects on one line stay two |
 
 The run pauses after Intent when the contract is in doubt: no source stated it, or the
 intent seat found a blocker in its logic (operator, 2026-10-23). It returns the contract and
 why, and no finder has spent anything; the user goes on (`proceed: true`, resumed from the
 paused run so the intent seat comes from cache) or corrects the contract and runs again.
 
-Fable runs where a wrong judgment misdirects everything after it (operator, 2026-10-23): the
-contract and its soundness, and the mapping of code to intent; working-here's rule allows a
-tier above opus by name for such a stage. The pattern angles and the checks run at opus; a
-checker at opus because a refutal drops the finding. `tiers` lowers any of them for one run.
+Fable runs wherever a wrong judgment misdirects or silently drops something: the contract and
+its soundness, the mapping of code to intent, the project's invariants and every checker, whose
+refutal drops a finding; working-here's rule allows a tier above opus by name for such a stage.
+The pattern angles run at opus and quality at sonnet. `tiers` lowers any of them for one run.
 
 The return carries the contract, the findings that stand with their verdicts, the refuted,
 the duplicates the checkers merged, the unchecked, the coverage per angle and the seat
 count. Nothing is built, run or posted.
 Its decisions are tested in `tests/test_review.py`; its token cost is unmeasured until the
 first live run.
+
+### 7.2 The `project-review` workflow
+
+`/blockchain-kit:project-review` reviews a whole repository at one commit, when the user asks.
+There is no diff and no pause: the tree is the subject, the project's docs are the contract, and
+the run is read-only. The command runs the repository's gate through `bk-gate` first and writes
+the report after.
+
+| Stage | Seats | Does |
+|---|---|---|
+| Intent | one `review-seat`, fable | The contract, the numbers table (documented value, status, measured value), whether the logic is sound for the domain, and 5 to 8 areas |
+| Find | eight: conformance, domain and numbers at fable; lines (two seats over the areas' halves), tracer and tests at opus; quality at sonnet | Each up to `perAngle` (10) candidates against the contract |
+| Check | one per file with candidates, eight at most each, `maxChecks` (48) in all, fable | As in §7.1 |
+
+The script holds the method. What is true of one repository is in its review guide, which every
+seat reads; the command names the guide's path and the sections it must have. A repository without
+a guide cannot run this: bsc-geth has none yet.
+
+Its decisions are tested in `tests/test_project_review.py`.
 
 ## 8. The working model
 

@@ -84,7 +84,7 @@ class ImplementArgs(unittest.TestCase):
         self.assertEqual(self.run_hook(self.call(both), self.env(self.bot)), (0, "", ""))
 
     def test_the_review_workflow_is_told_too(self):
-        for name in ("blockchain-kit:review", "review"):
+        for name in ("blockchain-kit:review", "review", "blockchain-kit:project-review"):
             with self.subTest(name=name):
                 review = {"base": "a" * 40, "head": "b" * 40}
                 new = self.rewritten(self.run_hook(self.call(review, name=name), self.env(self.fork)))

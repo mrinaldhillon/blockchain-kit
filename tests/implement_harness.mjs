@@ -10,7 +10,7 @@
 //   scenario: { workflow?, args, answers: { "<label>": <value> | null | {"__throw": "msg"} } }
 //   workflow names the script under workflows/ (default implement). A label is the agent
 //   call's opts.label: lane:<id>, integrate, gate, review, fix, re-gate in implement;
-//   intent, find:<angles>, check:<n> in review. A label with no answer returns null (a
+//   intent, find:<angles>, check:<n> in review and project-review. A label with no answer returns null (a
 //   dead stage).
 // Output: one JSON object { result, calls: [{label, model, agentType, isolation,
 //   prompt, phase}], logs: [], phases: [] } on stdout.

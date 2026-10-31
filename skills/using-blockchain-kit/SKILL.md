@@ -39,6 +39,7 @@ anything here.
 | Right-sizing or tuning the running node | the `blockchain-kit:infra-profiler` agent |
 | Several independent units of one change, each with its own brief and packages | `/blockchain-kit:implement`, on the user's request or their approval of a plan's `## Units`; it runs the `blockchain-kit:implement` workflow |
 | A pull request or branch reviewed against what it was written to do: the contract, its soundness, then the code | `/blockchain-kit:review`: the user's command, which runs the `blockchain-kit:review` workflow |
+| A whole repository reviewed at one commit against its own docs | `/blockchain-kit:project-review`: the user's command, which runs the `blockchain-kit:project-review` workflow |
 | A workflow script written in the session (the `Workflow` tool) | every `agent()` names `model`: `blockchain-kit:working-here`, Tiers and dispatch. The `workflow-tiers` hook refuses one that leaves it unset |
 
 ## In prediction-bot
