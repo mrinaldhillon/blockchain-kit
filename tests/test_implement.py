@@ -141,6 +141,21 @@ class Implement(unittest.TestCase):
         self.assertEqual((ran["result"]["gate"]["rc"], ran["result"]["gate"]["green"]), (1, False))
         self.assertEqual(ran["result"]["merged"], ["a", "b"])
 
+    def test_the_gate_verdict_is_found_behind_a_cap_notice(self):
+        # bk-gate's notice on the production host comes first: without the verdict the run read as ungated
+        notice = "bk-gate: run: capped by /srv/bsc/build/bin/verifyconstrained"
+        for what, verdict, green in (("green", GREEN, True), ("red", RED, False)):
+            with self.subTest(what):
+                ran = self.run_script(args(), answers(gate={"line": notice, "rc": 0, "tail": verdict + "\nok  pkg"}))
+                self.assertEqual((ran["result"]["gate"]["green"], ran["result"]["gate"]["line"]), (green, verdict))
+                self.assertEqual("review" in self.labels(ran), green)
+        ran = self.run_script(args(), answers(gate={"line": RED, "rc": 1, "tail": GREEN}))  # the first verdict decides
+        self.assertFalse(ran["result"]["gate"]["green"])
+
+    def test_a_lanes_doc_deltas_reach_the_session(self):
+        ran = self.run_script(args(), answers(**{"lane:b": lane(2, "internal/state", docDeltas=["docs/x.md: new sentence"])}))
+        self.assertEqual(ran["result"]["docDeltas"], [{"unit": "b", "delta": "docs/x.md: new sentence"}])
+
     def test_a_dead_stage_is_stalled_with_what_it_left(self):
         ran = self.run_script(args(), answers(**{"lane:b": None}))
         dead = next(s for s in ran["result"]["stalled"] if s["unit"] == "b")

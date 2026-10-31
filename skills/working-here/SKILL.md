@@ -51,9 +51,10 @@ anything here.
    Before the first launch, say the runs and units it will start. Lanes in worktrees beside
    the clone (never inside it), one merged run branch, the gate, one review, one fix round. Its args always carry `project`
    and `module` (the command says how). It runs in the background and returns
-   `{merged, conflicted, handbacks, stalled, gate, findings, owed, head}`.
+   `{merged, conflicted, handbacks, stalled, docDeltas, gate, findings, owed, head}`.
 5. **Adjudicate.** Hand-backs are questions for you. A conflicted or stalled lane names what
-   it left. Open findings are fixed, deferred to an issue, or accepted, and you say which.
+   it left. `docDeltas` you apply on the run branch. Open findings are fixed, deferred to an
+   issue, or accepted, and you say which.
    `owed.parity`: run `make replay-parity` once. `owed.read`: read those diffs yourself.
 6. **Land in one call**, and nothing after it. Landing needs no confirmation. A production
    deploy the change needs (a geth restart, a host install) is part of the same landing, and

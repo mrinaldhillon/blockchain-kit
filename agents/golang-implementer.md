@@ -79,9 +79,10 @@ section governs, and it is the one case in which you commit.
 - **Hand back rather than guess.** A question the brief does not answer: finish what does not
   depend on it, commit only what is complete and green, and return `handback` with the question
   and the options you see. In a serial fork run, a hand-back commits nothing.
-- **Return** `{branch, start, sha, paths, gates, summary, handback?}`: the branch name, the
+- **Return** `{branch, start, sha, paths, gates, summary, docDeltas?, handback?}`: the branch name, the
   commit you started from, the commit you ended on (equal to `start` when you committed
-  nothing), every path you changed, the gates, and one line per path.
+  nothing), every path you changed, the gates, one line per path, and each docs row your change owes (the
+  file and the replacement sentence).
 
 ## Before you author
 
